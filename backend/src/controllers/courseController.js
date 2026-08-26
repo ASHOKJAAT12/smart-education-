@@ -9,8 +9,8 @@ const { uploadThumbnail, deleteFile } = require('../services/cloudinaryService')
 const getCourses = asyncHandler(async (req, res) => {
     const pagination = parsePagination(req.query);
 
-    // Students / anonymous: see only published. Teachers/admins: can pass ?published=all
-    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
+    // Hackathon configuration: Allow fetching all courses for seamless Onboarding 
+    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher' || req.user.role === 'student');
     const defaults = canSeeAll ? {} : { isPublished: true };
     const filter = buildContentFilter(req.query, defaults);
 

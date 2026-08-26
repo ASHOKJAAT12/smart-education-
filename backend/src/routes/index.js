@@ -15,6 +15,8 @@ const studyPlanRoutes = require('./studyPlanRoutes');
 const aiRoutes = require('./aiRoutes');
 const progressRoutes = require('./progressRoutes');
 const teacherRoutes = require('./teacherRoutes'); // Phase 9
+const adminRoutes = require('./adminRoutes'); // Phase 10
+
 const router = express.Router();
 
 /**
@@ -49,5 +51,11 @@ router.use('/ai', aiRoutes);
 
 // Phase 8: Core Adaptive Architecture Engine
 router.use('/progress', progressRoutes);
+
+// Phase 9: Teacher Portal
+router.use('/teacher', teacherRoutes);
+
+// Phase 10: Admin Management
+router.use('/admin', adminRoutes);
 
 module.exports = router;

@@ -51,6 +51,12 @@ import QuestionBank from '../pages/teacher/QuestionBank';
 import StudentAnalytics from '../pages/teacher/StudentAnalytics';
 import TeacherAIAssistant from '../pages/teacher/TeacherAIAssistant';
 
+// Phase 10 - Admin Environment
+import AdminLayout from '../layouts/AdminLayout';
+import AdminDashboard from '../pages/admin/AdminDashboard';
+import UserManagement from '../pages/admin/UserManagement';
+import AuditLogs from '../pages/admin/AuditLogs';
+
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -250,6 +256,28 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
+            {/* Direct intuitive alias for /student/courses tracking inside Layout instead of BaseLayout */}
+            <Route
+                path="/student/courses"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><CoursesPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            {/* Direct intuitive alias for /student/quizzes tracking inside Layout */}
+            <Route
+                path="/student/quizzes"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><QuizListPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
             <Route
                 path="/student/subjects/:id"
                 element={
@@ -390,15 +418,20 @@ const AppRouter = () => {
                 <Route path="ai-assistant" element={<TeacherAIAssistant />} />
             </Route>
 
-            {/* ── Admin (Phase 6) ─────────────────────────────── */}
-            <Route
-                path="/admin/*"
-                element={
-                    <ProtectedRoute roles={['admin']}>
-                        <PlaceholderDashboard role="admin" />
-                    </ProtectedRoute>
-                }
-            />
+            {/* ── Admin (Phase 10) ─────────────────────────────── */}
+            <Route path="/admin" element={
+                <ProtectedRoute roles={['admin']}>
+                    <AdminLayout />
+                </ProtectedRoute>
+            }>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="users" element={<UserManagement />} />
+                <Route path="audit-logs" element={<AuditLogs />} />
+                {/* Fallbacks for sub-items pending completion */}
+                <Route path="moderation" element={<Navigate to="dashboard" replace />} />
+                <Route path="settings" element={<Navigate to="dashboard" replace />} />
+            </Route>
 
             {/* ── Error pages ─────────────────────────────────── */}
             <Route

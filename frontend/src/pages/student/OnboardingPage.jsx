@@ -77,8 +77,8 @@ const StepCourse = ({ value, onChange, onNext, onBack }) => {
                             key={course._id}
                             onClick={() => onChange(course._id)}
                             className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${value === course._id
-                                    ? 'bg-violet-600/20 border-violet-500/60 text-white'
-                                    : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-slate-600'
+                                ? 'bg-violet-600/20 border-violet-500/60 text-white'
+                                : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-slate-600'
                                 }`}
                         >
                             <BookOpen className={`w-4 h-4 flex-shrink-0 ${value === course._id ? 'text-violet-400' : 'text-slate-500'}`} />
@@ -215,6 +215,7 @@ const StepNav = ({ onBack, onNext, canSkip }) => (
 // ─── Main Onboarding Page ─────────────────────────────────────────────────────
 
 const OnboardingPage = () => {
+    const queryClient = useQueryClient();
     const { user, refreshUser } = useAuth();
     const navigate = useNavigate();
     const [step, setStep] = useState(1);
@@ -228,6 +229,7 @@ const OnboardingPage = () => {
         mutationFn: completeOnboarding,
         onSuccess: async () => {
             await refreshUser();
+            queryClient.invalidateQueries({ queryKey: ['student-dashboard'] });
             navigate('/student/dashboard');
         },
         onError: (err) => setError(err?.response?.data?.error || 'Something went wrong. Please try again.'),
