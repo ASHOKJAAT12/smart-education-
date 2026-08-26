@@ -1,66 +1,30 @@
-import api, { setAccessToken, clearAccessToken } from './api';
+import api from './api';
 
-/**
- * Auth API service — all HTTP calls for authentication.
- */
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
-/**
- * Register a new student account.
- * @param {{ name, email, password }} data
- */
-export const register = async (data) => {
-    const res = await api.post('/auth/register', data);
-    return res.data;
-};
+export const register = (data) => api.post('/auth/register', data).then((r) => r.data);
 
-/**
- * Login with email + password.
- * @param {{ email, password }} credentials
- */
-export const login = async (credentials) => {
-    const res = await api.post('/auth/login', credentials);
-    return res.data;
-};
+export const login = (credentials) => api.post('/auth/login', credentials).then((r) => r.data);
 
-/**
- * Logout — invalidates refresh token on the server.
- */
-export const logout = async () => {
-    const res = await api.post('/auth/logout');
-    return res.data;
-};
+export const logout = () => api.post('/auth/logout').then((r) => r.data);
 
-/**
- * Request a password reset email.
- * @param {string} email
- */
-export const forgotPassword = async (email) => {
-    const res = await api.post('/auth/forgot-password', { email });
-    return res.data;
-};
+export const forgotPassword = (email) => api.post('/auth/forgot-password', { email }).then((r) => r.data);
 
-/**
- * Reset password with the token from the email link.
- * @param {{ token, password }} data
- */
-export const resetPassword = async (data) => {
-    const res = await api.post('/auth/reset-password', data);
-    return res.data;
-};
+export const resetPassword = (data) => api.post('/auth/reset-password', data).then((r) => r.data);
 
-/**
- * Fetch the authenticated user's profile.
- */
-export const getMe = async () => {
-    const res = await api.get('/users/me');
-    return res.data;
-};
+// ─── User profile ─────────────────────────────────────────────────────────────
 
-/**
- * Update the authenticated user's profile.
- * @param {object} updates
- */
-export const updateMe = async (updates) => {
-    const res = await api.patch('/users/me', updates);
-    return res.data;
-};
+export const getMe = () => api.get('/users/me').then((r) => r.data);
+
+export const updateMe = (updates) => api.patch('/users/me', updates).then((r) => r.data);
+
+// ─── Phase 4 — Onboarding & Dashboard ────────────────────────────────────────
+
+export const getOnboardingStatus = () => api.get('/users/onboarding-status').then((r) => r.data);
+
+export const completeOnboarding = (data) => api.post('/users/onboarding', data).then((r) => r.data);
+
+export const getDashboard = () => api.get('/student/dashboard').then((r) => r.data);
+
+export const uploadAvatar = (formData) =>
+    api.patch('/users/me/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);

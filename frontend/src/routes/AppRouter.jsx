@@ -22,14 +22,14 @@ import TopicDetailPage from '../pages/topics/TopicDetailPage';
 import QuizListPage from '../pages/quizzes/QuizListPage';
 import ManageCoursesPage from '../pages/manage/ManageCoursesPage';
 
+// Phase 4 — Student
+import StudentLayout from '../layouts/StudentLayout';
+import StudentDashboard from '../pages/student/StudentDashboard';
+import StudentProfilePage from '../pages/student/StudentProfilePage';
+import OnboardingPage from '../pages/student/OnboardingPage';
+
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
-/**
- * ProtectedRoute — blocks unauthenticated access.
- * Saves the intended location so the user is redirected back after login.
- *
- * @param {string[]} roles - Optional list of roles allowed. Empty = any authenticated user.
- */
 const ProtectedRoute = ({ children, roles = [] }) => {
     const { user, loading } = useAuth();
     const location = useLocation();
@@ -48,6 +48,21 @@ const ProtectedRoute = ({ children, roles = [] }) => {
 
     if (roles.length > 0 && !roles.includes(user.role)) {
         return <Navigate to="/unauthorized" replace />;
+    }
+
+    return children;
+};
+
+/**
+ * OnboardingGuard — redirects students who have not completed onboarding.
+ * Allows access to /student/onboarding itself so they can complete it.
+ */
+const OnboardingGuard = ({ children }) => {
+    const { user } = useAuth();
+    const location = useLocation();
+
+    if (user?.role === 'student' && !user.onboardingCompleted && location.pathname !== '/student/onboarding') {
+        return <Navigate to="/student/onboarding" replace />;
     }
 
     return children;
@@ -169,15 +184,71 @@ const AppRouter = () => {
                 }
             />
 
-            {/* ── Student (Phase 3+) ───────────────────────────── */}
+            {/* ── Student (Phase 4) ───────────────────────────── */}
+
+            {/* Onboarding — accessible before onboarding is complete */}
             <Route
-                path="/student/*"
+                path="/student/onboarding"
                 element={
                     <ProtectedRoute roles={['student']}>
-                        <PlaceholderDashboard role="student" />
+                        <OnboardingPage />
                     </ProtectedRoute>
                 }
             />
+
+            {/* All other student routes require onboarding */}
+            <Route
+                path="/student/dashboard"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><StudentDashboard /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/profile"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><StudentProfilePage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/subjects"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><CoursesPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/subjects/:id"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><SubjectDetailPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/topics/:id"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><TopicDetailPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            {/* Catch-all for /student/* — redirect to dashboard */}
+            <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
 
             {/* ── Teacher (Phase 5) ───────────────────────────── */}
             <Route

@@ -8,6 +8,7 @@ const topicRoutes = require('./topicRoutes');
 const resourceRoutes = require('./resourceRoutes');
 const questionRoutes = require('./questionRoutes');
 const quizRoutes = require('./quizRoutes');
+const studentRoutes = require('./studentRoutes');
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ const router = express.Router();
  * Phase 1: /health
  * Phase 2: /auth, /users
  * Phase 3: /courses, /subjects, /topics, /resources, /questions, /quizzes
+ * Phase 4: /student
  */
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
@@ -28,6 +30,7 @@ router.use('/topics', topicRoutes);
 router.use('/resources', resourceRoutes);
 router.use('/questions', questionRoutes);
 router.use('/quizzes', quizRoutes);
+router.use('/student', studentRoutes);
 
 module.exports = router;
 

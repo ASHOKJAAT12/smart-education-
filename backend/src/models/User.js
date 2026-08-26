@@ -35,20 +35,36 @@ const userSchema = new mongoose.Schema(
         },
         // Student-specific onboarding fields (populated in Phase 4)
         course: {
-            type: String,
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Course',
             default: null,
         },
         semester: {
             type: String,
+            trim: true,
             default: null,
         },
+        subjects: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Subject',
+        }],
         learningGoal: {
             type: String,
+            enum: ['exam_prep', 'deepen_knowledge', 'career', 'revision', null],
             default: null,
         },
         dailyStudyTime: {
             type: Number, // minutes per day
             default: null,
+        },
+        onboardingCompleted: {
+            type: Boolean,
+            default: false,
+        },
+        profilePicturePublicId: {
+            type: String,
+            default: null,
+            select: false, // internal, never exposed
         },
         // Auth state
         isEmailVerified: {
@@ -89,6 +105,7 @@ const userSchema = new mongoose.Schema(
 // ─── Indexes ───────────────────────────────────────────────────────────────
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
+userSchema.index({ onboardingCompleted: 1 });
 
 // ─── Pre-save hook — hash password ─────────────────────────────────────────
 userSchema.pre('save', async function (next) {
@@ -114,8 +131,10 @@ userSchema.methods.toSafeObject = function () {
         profilePicture: this.profilePicture,
         course: this.course,
         semester: this.semester,
+        subjects: this.subjects,
         learningGoal: this.learningGoal,
         dailyStudyTime: this.dailyStudyTime,
+        onboardingCompleted: this.onboardingCompleted,
         isEmailVerified: this.isEmailVerified,
         isActive: this.isActive,
         lastLoginAt: this.lastLoginAt,

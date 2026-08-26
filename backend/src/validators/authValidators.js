@@ -1,4 +1,5 @@
 const { body } = require('express-validator');
+const mongoose = require('mongoose');
 
 /**
  * Validators for all auth endpoints.
@@ -82,10 +83,41 @@ const updateMeValidators = [
         .isInt({ min: 0, max: 1440 }).withMessage('Daily study time must be 0–1440 minutes'),
 ];
 
+/**
+ * POST /users/onboarding
+ */
+const onboardingValidators = [
+    body('courseId')
+        .optional({ nullable: true })
+        .custom((val) => !val || mongoose.isValidObjectId(val))
+        .withMessage('courseId must be a valid ID'),
+
+    body('subjects')
+        .optional({ nullable: true })
+        .isArray().withMessage('subjects must be an array')
+        .custom((arr) => arr.every((id) => mongoose.isValidObjectId(id)))
+        .withMessage('Each subject must be a valid ID'),
+
+    body('semester')
+        .optional({ nullable: true })
+        .trim()
+        .isLength({ max: 20 }).withMessage('Semester must be at most 20 characters'),
+
+    body('learningGoal')
+        .optional({ nullable: true })
+        .isIn(['exam_prep', 'deepen_knowledge', 'career', 'revision'])
+        .withMessage('Invalid learning goal'),
+
+    body('dailyStudyTime')
+        .optional({ nullable: true })
+        .isInt({ min: 15, max: 480 }).withMessage('Daily study time must be 15–480 minutes'),
+];
+
 module.exports = {
     registerValidators,
     loginValidators,
     forgotPasswordValidators,
     resetPasswordValidators,
     updateMeValidators,
+    onboardingValidators,
 };
