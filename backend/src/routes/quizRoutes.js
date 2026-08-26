@@ -1,0 +1,17 @@
+const express = require('express');
+const router = express.Router();
+const { getQuizzes, getQuizById, createQuiz, updateQuiz, deleteQuiz } = require('../controllers/quizController');
+const { authenticateUser, optionalAuth } = require('../middleware/authenticate');
+const { authorizeRoles } = require('../middleware/authorize');
+const { createQuizValidators, updateQuizValidators } = require('../validators/courseValidators');
+
+// All authenticated users can list/view published quizzes
+router.get('/', authenticateUser, getQuizzes);
+router.get('/:id', authenticateUser, getQuizById);
+
+// Manage quizzes: teacher + admin only
+router.post('/', authenticateUser, authorizeRoles('teacher', 'admin'), createQuizValidators, createQuiz);
+router.patch('/:id', authenticateUser, authorizeRoles('teacher', 'admin'), updateQuizValidators, updateQuiz);
+router.delete('/:id', authenticateUser, authorizeRoles('teacher', 'admin'), deleteQuiz);
+
+module.exports = router;
