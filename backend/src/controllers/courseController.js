@@ -13,6 +13,7 @@ const getCourses = asyncHandler(async (req, res) => {
     const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher' || req.user.role === 'student');
     const defaults = canSeeAll ? {} : { isPublished: true };
     const filter = buildContentFilter(req.query, defaults);
+    if (canSeeAll) delete filter.isPublished;
 
     const [courses, total] = await Promise.all([
         Course.find(filter)
