@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getDashboard } from '../../services/authService';
 import { assessmentService } from '../../services/assessmentService';
+import { learningService } from '../../services/learningService';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const goalLabel = {
@@ -69,6 +70,11 @@ const StudentDashboard = () => {
         queryFn: assessmentService.getAvailableAssessments,
     });
 
+    const { data: recData } = useQuery({
+        queryKey: ['recommendations'],
+        queryFn: learningService.getRecommendations,
+    });
+
     if (dashboardLoading || assessmentsLoading) return (
         <div className="p-6 space-y-4">
             {[...Array(5)].map((_, i) => <div key={i} className="h-24 bg-slate-800 rounded-2xl animate-pulse" />)}
@@ -86,6 +92,7 @@ const StudentDashboard = () => {
     const { profile, onboarding, content, diagnostic } = dashboardData;
     const availableAssessments = assessmentsData?.data?.assessments || [];
     const firstAssessmentId = availableAssessments.length > 0 ? availableAssessments[0]._id : null;
+    const topRecommendation = recData?.data?.data?.recommendations?.[0] || null;
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
@@ -177,6 +184,41 @@ const StudentDashboard = () => {
                                     <span className="text-sm text-slate-500 italic">No diagnostic assessments available yet.</span>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* ── Phase 6 Recommended for You ───────────── */}
+            {topRecommendation && (
+                <section>
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest text-[#f59e0b]">🔥 Recommended For You</h2>
+                        <Link to="/student/recommendations" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View all →</Link>
+                    </div>
+                    <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 p-6 flex flex-col sm:flex-row items-center gap-6 group hover:border-amber-500/50 transition-colors">
+                        <div className="flex-1">
+                            <h3 className="text-xl font-bold text-slate-800 mb-1">{topRecommendation.topicId?.name}</h3>
+                            <p className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 mb-3">
+                                Priority Score: {topRecommendation.priorityScore}
+                            </p>
+                            <div className="text-sm text-slate-600 bg-white p-3 rounded-xl shadow-sm border border-slate-100">
+                                <span className="font-semibold text-slate-700">Why?</span> "{topRecommendation.reason}"
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-3 w-full sm:w-auto">
+                            <Link
+                                to={`/student/topics/${topRecommendation.topicId?._id}`}
+                                className="w-full sm:w-auto inline-flex justify-center items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-6 py-3 rounded-xl transition-colors shadow-sm"
+                            >
+                                {topRecommendation.recommendedAction}
+                            </Link>
+                            <Link
+                                to="/student/study-plan"
+                                className="w-full sm:w-auto inline-flex justify-center items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-6 py-3 rounded-xl transition-colors shadow-sm"
+                            >
+                                View Today's Plan
+                            </Link>
                         </div>
                     </div>
                 </section>

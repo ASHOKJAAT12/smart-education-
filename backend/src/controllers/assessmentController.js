@@ -3,6 +3,7 @@ const AssessmentAttempt = require('../models/AssessmentAttempt');
 const AssessmentResult = require('../models/AssessmentResult');
 const Question = require('../models/Question');
 const Topic = require('../models/Topic');
+const { updateProgressFromAssessment } = require('../services/recommendationService');
 const asyncHandler = require('../middleware/asyncHandler');
 
 class AppError extends Error {

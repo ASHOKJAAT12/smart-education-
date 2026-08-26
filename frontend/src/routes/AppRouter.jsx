@@ -31,6 +31,8 @@ import AssessmentIntro from '../pages/student/AssessmentIntro';
 import AssessmentTake from '../pages/student/AssessmentTake';
 import AssessmentResult from '../pages/student/AssessmentResult';
 import AssessmentHistory from '../pages/student/AssessmentHistory';
+import RecommendationsPage from '../pages/student/RecommendationsPage';
+import StudyPlan from '../pages/student/StudyPlan';
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -288,6 +290,27 @@ const AppRouter = () => {
                     <ProtectedRoute roles={['student']}>
                         <OnboardingGuard>
                             <StudentLayout><AssessmentHistory /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            {/* Phase 6 Recommendation Routes */}
+            <Route
+                path="/student/recommendations"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><RecommendationsPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/study-plan"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><StudyPlan /></StudentLayout>
                         </OnboardingGuard>
                     </ProtectedRoute>
                 }

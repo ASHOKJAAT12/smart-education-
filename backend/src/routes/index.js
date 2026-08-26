@@ -10,6 +10,8 @@ const questionRoutes = require('./questionRoutes');
 const quizRoutes = require('./quizRoutes');
 const studentRoutes = require('./studentRoutes');
 const assessmentRoutes = require('./assessmentRoutes');
+const recommendationRoutes = require('./recommendationRoutes');
+const studyPlanRoutes = require('./studyPlanRoutes');
 const router = express.Router();
 
 /**
@@ -31,7 +33,12 @@ router.use('/resources', resourceRoutes);
 router.use('/questions', questionRoutes);
 router.use('/quizzes', quizRoutes);
 router.use('/student', studentRoutes);
+
+// Phase 5: Assessments
 router.use('/assessments', assessmentRoutes);
 
-module.exports = router;
+// Phase 6: Recommendations
+router.use('/recommendations', recommendationRoutes);
+router.use('/study-plan', studyPlanRoutes);
 
+module.exports = router;
