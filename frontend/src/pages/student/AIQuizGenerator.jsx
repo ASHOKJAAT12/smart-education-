@@ -43,12 +43,12 @@ const AIQuizGenerator = () => {
                                 placeholder="e.g. 64f..."
                                 value={topicId}
                                 onChange={(e) => setTopicId(e.target.value)}
-                                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm"
+                                className="w-full bg-slate-50 text-slate-900 border border-slate-300 rounded-lg p-2.5 text-sm"
                             />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Difficulty</label>
-                            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+                            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-slate-50 text-slate-900 border border-slate-300 rounded-lg p-2.5 text-sm">
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
@@ -62,7 +62,7 @@ const AIQuizGenerator = () => {
                                 max="10"
                                 value={count}
                                 onChange={(e) => setCount(Number(e.target.value))}
-                                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm"
+                                className="w-full bg-slate-50 text-slate-900 border border-slate-300 rounded-lg p-2.5 text-sm"
                             />
                         </div>
                         <button
@@ -109,7 +109,7 @@ const AIQuizGenerator = () => {
                                     <p className="font-bold text-slate-800 mb-3">{idx + 1}. {q.title}</p>
                                     <div className="space-y-2 mb-4">
                                         {q.options.map((opt, i) => (
-                                            <div key={i} className={`p-2 rounded border text-sm ${opt === q.correctAnswer ? 'bg-green-50 border-green-200 font-semibold' : 'bg-slate-50 border-slate-200'}`}>
+                                            <div key={i} className={`p-2 rounded border text-sm ${opt === q.correctAnswer ? 'bg-green-50 border-green-200 text-green-900 font-semibold' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
                                                 {opt} {opt === q.correctAnswer && "✅"}
                                             </div>
                                         ))}

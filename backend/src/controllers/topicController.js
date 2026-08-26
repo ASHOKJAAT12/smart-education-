@@ -2,8 +2,11 @@ const asyncHandler = require('../middleware/asyncHandler');
 const Topic = require('../models/Topic');
 const Subject = require('../models/Subject');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
-const { validate } = require('../utils/validate');
 const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const practiceService = require('../services/practice.service');
+const streakService = require('../services/streak.service');
+const LearningResource = require('../models/LearningResource');
+const Progress = require('../models/Progress');
 
 // ─── GET /topics ───────────────────────────────────────────────────────────
 const getTopics = asyncHandler(async (req, res) => {
@@ -125,4 +128,35 @@ const deleteTopic = asyncHandler(async (req, res) => {
     return successResponse(res, null, 'Topic deleted');
 });
 
-module.exports = { getTopics, getTopicById, createTopic, updateTopic, deleteTopic };
+// ─── GET /topics/:id/learning ──────────────────────────────────────────────
+const getTopicLearning = asyncHandler(async (req, res) => {
+    const topic = await Topic.findById(req.params.id);
+    if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+    // Fetch attached verified resources
+    const resources = await LearningResource.find({ topicId: topic._id, isPublished: true });
+
+    // Fetch real-time progress map
+    const progress = await Progress.findOne({ studentId: req.user._id, topicId: topic._id });
+
+    // Mark daily activity streak conceptually just for reviewing deep learning content
+    await streakService.logActivityAndRefreshStreak(req.user._id);
+
+    return successResponse(res, { topic, resources, progress }, 'Topic learning package retrieved');
+});
+
+// ─── POST /topics/:id/practice/start ─────────────────────────────────────────
+const startPractice = asyncHandler(async (req, res) => {
+    const topic = await Topic.findById(req.params.id);
+    if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+    // Tap into adaptive intelligence service
+    const questions = await practiceService.fetchAdaptivePracticeSession(req.user._id, topic._id);
+
+    // Update daily streak tracker since doing practice matters
+    await streakService.logActivityAndRefreshStreak(req.user._id);
+
+    return successResponse(res, { questions }, 'Adaptive practice session initialized');
+});
+
+module.exports = { getTopics, getTopicById, createTopic, updateTopic, deleteTopic, getTopicLearning, startPractice };

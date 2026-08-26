@@ -318,21 +318,41 @@ const StudentDashboard = () => {
                 )}
             </section>
 
-            {/* ── Progress stats (empty — no fake data) ─────────────────── */}
+            {/* ── Phase 8 Real Progress Stats ─────────────────── */}
+            {dashboardData?.progressStats?.nextBestAction && (
+                <section>
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest text-[#10b981]">💡 Next Best Action</h2>
+                    </div>
+                    <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-500/5 p-6 flex items-center justify-between group transition-colors">
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-1">{dashboardData.progressStats.nextBestAction.message}</h3>
+                            <p className="text-sm text-emerald-700 font-semibold uppercase tracking-wider">{dashboardData.progressStats.nextBestAction.actionType}</p>
+                        </div>
+                        <Link
+                            to={dashboardData.progressStats.nextBestAction.route}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl transition-colors shadow-sm"
+                        >
+                            Continue
+                        </Link>
+                    </div>
+                </section>
+            )}
+
             <section>
                 <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Progress</h2>
-                    <Link to="/student/assessment/history" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View Assessment History →</Link>
+                    <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Progress Metrics</h2>
+                    <div className="flex space-x-3 text-xs">
+                        <Link to="/student/progress" className="text-violet-500 hover:text-violet-400 font-bold transition-colors">View Analytics</Link>
+                        <Link to="/student/quiz-history" className="text-violet-500 hover:text-violet-400 font-bold transition-colors">Quiz History</Link>
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <StatCard icon={TrendingUp} label="Overall Mastery" color="bg-violet-600" empty />
-                    <StatCard icon={Target} label="Quiz Accuracy" color="bg-blue-600" empty />
-                    <StatCard icon={CheckSquare} label="Topics Done" color="bg-emerald-600" empty />
-                    <StatCard icon={Clock} label="Study Time" color="bg-amber-600" empty />
+                    <StatCard icon={TrendingUp} label="Overall Mastery" value={`${dashboardData?.progressStats?.overallMastery || 0}%`} color="bg-violet-600" empty={!dashboardData?.progressAvailable} />
+                    <StatCard icon={CalendarDays} label="Current Streak" value={`${dashboardData?.progressStats?.streak || 0} Days`} color="bg-blue-600" empty={!dashboardData?.progressAvailable} />
+                    <StatCard icon={CheckSquare} label="Topics In Progress" value={dashboardData?.progressStats?.completedTopics || 0} color="bg-emerald-600" empty={!dashboardData?.progressAvailable} />
+                    <StatCard icon={Target} label="Quizzes Available" value={content.availableQuizCount} color="bg-amber-600" empty={false} />
                 </div>
-                <p className="text-center text-xs text-slate-600 mt-3">
-                    Complete your first assessment to start tracking progress.
-                </p>
             </section>
         </div>
     );

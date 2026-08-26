@@ -13,6 +13,7 @@ const assessmentRoutes = require('./assessmentRoutes');
 const recommendationRoutes = require('./recommendationRoutes');
 const studyPlanRoutes = require('./studyPlanRoutes');
 const aiRoutes = require('./aiRoutes');
+const progressRoutes = require('./progressRoutes');
 const router = express.Router();
 
 /**
@@ -44,5 +45,8 @@ router.use('/study-plan', studyPlanRoutes);
 
 // Phase 7: Smart AI
 router.use('/ai', aiRoutes);
+
+// Phase 8: Core Adaptive Architecture Engine
+router.use('/progress', progressRoutes);
 
 module.exports = router;

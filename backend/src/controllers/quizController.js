@@ -3,6 +3,10 @@ const Quiz = require('../models/Quiz');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
 const { validate } = require('../utils/validate');
 const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const QuizAttempt = require('../models/QuizAttempt');
+const Question = require('../models/Question');
+const masteryService = require('../services/mastery.service');
+const streakService = require('../services/streak.service');
 
 // ─── GET /quizzes ──────────────────────────────────────────────────────────
 const getQuizzes = asyncHandler(async (req, res) => {
@@ -117,4 +121,86 @@ const deleteQuiz = asyncHandler(async (req, res) => {
     return successResponse(res, null, 'Quiz deleted');
 });
 
-module.exports = { getQuizzes, getQuizById, createQuiz, updateQuiz, deleteQuiz };
+// ─── POST /quizzes/:id/start ──────────────────────────────────────────────────
+const startQuiz = asyncHandler(async (req, res) => {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ success: false, error: 'Quiz not found' });
+
+    // Establish attempt context in DB
+    const attempt = await QuizAttempt.create({
+        studentId: req.user._id,
+        quizId: quiz._id,
+        topicId: quiz.topicId,
+        status: 'in-progress',
+        answers: []
+    });
+
+    return successResponse(res, { attemptId: attempt._id }, 'Formal Quiz Execution Began', 201);
+});
+
+// ─── POST /quizzes/attempts/:attemptId/submit ───────────────────────────────
+const submitQuiz = asyncHandler(async (req, res) => {
+    const { attemptId } = req.params;
+    const { answers } = req.body; // Array of { questionId, selectedOption }
+
+    const attempt = await QuizAttempt.findOne({ _id: attemptId, studentId: req.user._id }).populate('quizId');
+    if (!attempt) return res.status(404).json({ success: false, error: 'Attempt not found' });
+    if (attempt.status === 'submitted') return res.status(400).json({ success: false, error: 'Attempt already finalized!' });
+
+    // Gather truth map from server-side Question definitions, stripping frontend of authority
+    const quizQuestions = await Question.find({ _id: { $in: attempt.quizId.questions } });
+    const questionMap = quizQuestions.reduce((map, q) => { map[q._id.toString()] = q; return map; }, {});
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+    let unansweredCount = 0;
+
+    const validatedAnswers = answers.map(ans => {
+        const qData = questionMap[ans.questionId];
+        if (!qData) return null; // Corrupted client payload
+        const isCorrect = (ans.selectedOption === qData.correctAnswer);
+        if (!ans.selectedOption || ans.selectedOption === '') unansweredCount++;
+        else if (isCorrect) correctCount++;
+        else incorrectCount++;
+
+        return { questionId: ans.questionId, selectedOption: ans.selectedOption, isCorrect };
+    }).filter(a => a !== null);
+
+    const scorePercentage = Math.round((correctCount / quizQuestions.length) * 100) || 0;
+
+    attempt.answers = validatedAnswers;
+    attempt.correctCount = correctCount;
+    attempt.incorrectCount = incorrectCount;
+    attempt.unansweredCount = unansweredCount;
+    attempt.scorePercentage = scorePercentage;
+    attempt.status = 'submitted';
+    attempt.submittedAt = new Date();
+    await attempt.save();
+
+    // ── TRIGGER PHASE 8 ADAPTIVE MASTER LEARNING LOOP ──
+    await masteryService.updateTopicMastery(
+        req.user._id,
+        attempt.topicId,
+        attempt.quizId.subjectId,
+        scorePercentage
+    );
+    await streakService.logActivityAndRefreshStreak(req.user._id);
+
+    return successResponse(res, { attemptId: attempt._id, scorePercentage }, 'Quiz attempt successfully evaluated and adaptive pipelines fired.');
+});
+
+// ─── GET /quizzes/attempts/:attemptId ───────────────────────────────────────
+const getQuizAttempt = asyncHandler(async (req, res) => {
+    const attempt = await QuizAttempt.findOne({ _id: req.params.attemptId, studentId: req.user._id })
+        .populate('quizId', 'title description passingScore')
+        .populate({
+            path: 'answers.questionId',
+            select: 'title options correctAnswer explanation difficulty'
+        }); // Full exposition allowed since the attempt is sealed lock.
+
+    if (!attempt) return res.status(404).json({ success: false, error: 'Attempt not found' });
+    return successResponse(res, attempt, 'Quiz Results Compiled');
+});
+
+
+module.exports = { getQuizzes, getQuizById, createQuiz, updateQuiz, deleteQuiz, startQuiz, submitQuiz, getQuizAttempt };

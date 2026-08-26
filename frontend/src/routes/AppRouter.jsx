@@ -35,6 +35,13 @@ import RecommendationsPage from '../pages/student/RecommendationsPage';
 import StudyPlan from '../pages/student/StudyPlan';
 import AITutor from '../pages/student/AITutor';
 import AIQuizGenerator from '../pages/student/AIQuizGenerator';
+// Phase 8 - Adaptive Engine
+import TopicLearningPage from '../pages/student/TopicLearningPage';
+import PracticeMode from '../pages/student/PracticeMode';
+import FormalQuiz from '../pages/student/FormalQuiz';
+import QuizResult from '../pages/student/QuizResult';
+import StudentProgress from '../pages/student/StudentProgress';
+import QuizHistory from '../pages/student/QuizHistory';
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -348,6 +355,15 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
+
+            {/* Phase 8 Adaptive Pipeline Routes */}
+            <Route path="/student/topics/:topicId/learn" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><TopicLearningPage /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
+            <Route path="/student/topics/:topicId/practice" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><PracticeMode /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
+            <Route path="/student/quizzes/:quizId" element={<ProtectedRoute roles={['student']}><OnboardingGuard><FormalQuiz /></OnboardingGuard></ProtectedRoute>} />
+            <Route path="/student/quizzes/:quizId/result/:attemptId" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><QuizResult /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
+            <Route path="/student/progress" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><StudentProgress /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
+            <Route path="/student/quiz-history" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><QuizHistory /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
+
             {/* Catch-all for /student/* — redirect to dashboard */}
             <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
 

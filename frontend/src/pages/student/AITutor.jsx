@@ -108,8 +108,8 @@ const AITutor = () => {
                             </div>
                         )}
                         <div className={`max-w-[75%] rounded-2xl p-4 shadow-sm ${msg.role === 'user'
-                                ? 'bg-violet-600 text-white rounded-tr-sm'
-                                : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm'
+                            ? 'bg-violet-600 text-white rounded-tr-sm'
+                            : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm'
                             }`}>
                             {msg.role === 'user' ? (
                                 <p className="text-sm font-medium">{msg.content}</p>
@@ -159,7 +159,7 @@ const AITutor = () => {
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Ask me anything about your studies..."
                         disabled={chatMutation.isLoading}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 disabled:opacity-50"
+                        className="w-full bg-slate-50 text-slate-900 border border-slate-300 rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 disabled:opacity-50"
                     />
                     <button
                         type="submit"

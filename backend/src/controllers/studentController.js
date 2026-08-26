@@ -3,6 +3,9 @@ const { successResponse } = require('../utils/apiResponse');
 const User = require('../models/User');
 const Subject = require('../models/Subject');
 const Quiz = require('../models/Quiz');
+const Progress = require('../models/Progress');
+const streakService = require('../services/streak.service');
+const learningService = require('../services/learning.service');
 
 /**
  * GET /api/v1/student/dashboard
@@ -17,6 +20,17 @@ const getDashboard = asyncHandler(async (req, res) => {
     const student = await User.findById(req.user._id)
         .populate('course', 'title category level thumbnail description')
         .populate('subjects', 'name description');
+
+    // Phase 8 Engine Fetchers
+    const progressList = await Progress.find({ studentId: req.user._id });
+    const streak = student.learningMetadata?.currentStreak || 0;
+
+    let totalM = 0;
+    progressList.forEach(p => totalM += p.masteryScore);
+    const overallMastery = progressList.length > 0 ? Math.round(totalM / progressList.length) : 0;
+
+    // Evaluate Next Best Action using Phase 6/8 priority bridges
+    const nextBestAction = await learningService.getNextBestAction(req.user._id);
 
     // Count published quizzes available for this student's subjects (for awareness, not fake progress)
     let availableQuizCount = 0;
@@ -61,23 +75,14 @@ const getDashboard = asyncHandler(async (req, res) => {
             completedAt: null,
         },
 
-        // ── Progress stats (Phase 5+ will populate these) ─────────────────
-        progressAvailable: false,
-        progressStats: null,
-        // progressStats shape (for Phase 5 reference):
-        // {
-        //   overallMastery: 0-100,
-        //   quizAccuracy: 0-100,
-        //   completedTopics: number,
-        //   totalTopics: number,
-        //   studyTimeMinutes: number,
-        //   recentQuizResults: [],
-        //   weakAreas: [],
-        //   strongAreas: [],
-        // }
-
-        // ── Recommendations (Phase 6) ──────────────────────────────────────
-        recommendations: null,
+        // ── Phase 8 Progress Engine ───────────────────────────────────────
+        progressAvailable: true,
+        progressStats: {
+            overallMastery,
+            streak,
+            nextBestAction,
+            completedTopics: progressList.length
+        }
     };
 
     return successResponse(res, dashboardData, 'Dashboard loaded');
