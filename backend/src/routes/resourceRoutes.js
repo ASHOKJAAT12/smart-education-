@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getResources, getResourceById, createResource, updateResource, deleteResource } = require('../controllers/resourceController');
 const { authenticateUser, optionalAuth } = require('../middleware/authenticate');
-const { authorizeRoles } = require('../middleware/authorize');
+const authorizeRoles = require('../middleware/authorize');
 const { uploadSingle } = require('../middleware/upload');
 const { createResourceValidators, updateResourceValidators } = require('../validators/courseValidators');
 

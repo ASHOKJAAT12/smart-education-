@@ -14,6 +14,14 @@ import RegisterPage from '../pages/auth/RegisterPage';
 import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
 
+// Phase 3 — Education pages
+import CoursesPage from '../pages/courses/CoursesPage';
+import CourseDetailPage from '../pages/courses/CourseDetailPage';
+import SubjectDetailPage from '../pages/subjects/SubjectDetailPage';
+import TopicDetailPage from '../pages/topics/TopicDetailPage';
+import QuizListPage from '../pages/quizzes/QuizListPage';
+import ManageCoursesPage from '../pages/manage/ManageCoursesPage';
+
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 /**
@@ -127,7 +135,41 @@ const AppRouter = () => {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* ── Student (Phase 3) ───────────────────────────── */}
+            {/* ── Education (Public / semi-public) ────────────── */}
+            <Route path="/courses" element={<BaseLayout><CoursesPage /></BaseLayout>} />
+            <Route path="/courses/:id" element={<BaseLayout><CourseDetailPage /></BaseLayout>} />
+            <Route path="/subjects/:id" element={<BaseLayout><SubjectDetailPage /></BaseLayout>} />
+            <Route path="/topics/:id" element={<BaseLayout><TopicDetailPage /></BaseLayout>} />
+
+            {/* ── Quizzes (authenticated) ──────────────────────── */}
+            <Route
+                path="/quizzes"
+                element={
+                    <ProtectedRoute>
+                        <BaseLayout><QuizListPage /></BaseLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/quizzes/:id"
+                element={
+                    <ProtectedRoute>
+                        <BaseLayout><QuizListPage /></BaseLayout>
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* ── Content Management (teacher + admin) ────────── */}
+            <Route
+                path="/manage/courses"
+                element={
+                    <ProtectedRoute roles={['teacher', 'admin']}>
+                        <ManageCoursesPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* ── Student (Phase 3+) ───────────────────────────── */}
             <Route
                 path="/student/*"
                 element={

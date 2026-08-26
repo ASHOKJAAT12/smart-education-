@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getQuestions, getQuestionById, createQuestion, updateQuestion, deleteQuestion } = require('../controllers/questionController');
 const { authenticateUser } = require('../middleware/authenticate');
-const { authorizeRoles } = require('../middleware/authorize');
+const authorizeRoles = require('../middleware/authorize');
 const { createQuestionValidators, updateQuestionValidators } = require('../validators/courseValidators');
 
 // Teacher + Admin only — students access questions via Quiz

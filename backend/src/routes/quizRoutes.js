@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getQuizzes, getQuizById, createQuiz, updateQuiz, deleteQuiz } = require('../controllers/quizController');
 const { authenticateUser, optionalAuth } = require('../middleware/authenticate');
-const { authorizeRoles } = require('../middleware/authorize');
+const authorizeRoles = require('../middleware/authorize');
 const { createQuizValidators, updateQuizValidators } = require('../validators/courseValidators');
 
 // All authenticated users can list/view published quizzes

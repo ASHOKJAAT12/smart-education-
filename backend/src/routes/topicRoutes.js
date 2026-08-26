@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTopics, getTopicById, createTopic, updateTopic, deleteTopic } = require('../controllers/topicController');
 const { authenticateUser, optionalAuth } = require('../middleware/authenticate');
-const { authorizeRoles } = require('../middleware/authorize');
+const authorizeRoles = require('../middleware/authorize');
 const { createTopicValidators, updateTopicValidators } = require('../validators/courseValidators');
 
 router.get('/', optionalAuth, getTopics);
