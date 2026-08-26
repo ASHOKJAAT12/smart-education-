@@ -6,7 +6,7 @@ import {
     CheckSquare, Zap, AlertCircle, ChevronRight, Sparkles,
 } from 'lucide-react';
 import { getDashboard } from '../../services/authService';
-
+import { assessmentService } from '../../services/assessmentService';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const goalLabel = {
@@ -58,13 +58,18 @@ const OverviewCard = ({ label, value, icon: Icon, href }) => {
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 const StudentDashboard = () => {
-    const { data, isLoading, isError, error } = useQuery({
+    const { data: dashboardData, isLoading: dashboardLoading, isError, error } = useQuery({
         queryKey: ['student-dashboard'],
         queryFn: getDashboard,
         select: (r) => r.data,
     });
 
-    if (isLoading) return (
+    const { data: assessmentsData, isLoading: assessmentsLoading } = useQuery({
+        queryKey: ['available-assessments'],
+        queryFn: assessmentService.getAvailableAssessments,
+    });
+
+    if (dashboardLoading || assessmentsLoading) return (
         <div className="p-6 space-y-4">
             {[...Array(5)].map((_, i) => <div key={i} className="h-24 bg-slate-800 rounded-2xl animate-pulse" />)}
         </div>
@@ -78,7 +83,9 @@ const StudentDashboard = () => {
         </div>
     );
 
-    const { profile, onboarding, content, diagnostic } = data;
+    const { profile, onboarding, content, diagnostic } = dashboardData;
+    const availableAssessments = assessmentsData?.data?.assessments || [];
+    const firstAssessmentId = availableAssessments.length > 0 ? availableAssessments[0]._id : null;
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
@@ -158,13 +165,17 @@ const StudentDashboard = () => {
                                     Take your diagnostic assessment to identify your strengths and weak areas.
                                     It only takes 10–15 minutes.
                                 </p>
-                                <Link
-                                    to="/student/diagnostic"
-                                    className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
-                                >
-                                    <Zap className="w-4 h-4" />
-                                    Start Assessment
-                                </Link>
+                                {firstAssessmentId ? (
+                                    <Link
+                                        to={`/student/assessment/intro/${firstAssessmentId}`}
+                                        className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                                    >
+                                        <Zap className="w-4 h-4" />
+                                        Start Assessment
+                                    </Link>
+                                ) : (
+                                    <span className="text-sm text-slate-500 italic">No diagnostic assessments available yet.</span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -207,7 +218,10 @@ const StudentDashboard = () => {
 
             {/* ── Progress stats (empty — no fake data) ─────────────────── */}
             <section>
-                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-3">Progress</h2>
+                <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Progress</h2>
+                    <Link to="/student/assessment/history" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View Assessment History →</Link>
+                </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard icon={TrendingUp} label="Overall Mastery" color="bg-violet-600" empty />
                     <StatCard icon={Target} label="Quiz Accuracy" color="bg-blue-600" empty />

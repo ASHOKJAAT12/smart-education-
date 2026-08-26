@@ -27,7 +27,10 @@ import StudentLayout from '../layouts/StudentLayout';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import StudentProfilePage from '../pages/student/StudentProfilePage';
 import OnboardingPage from '../pages/student/OnboardingPage';
-
+import AssessmentIntro from '../pages/student/AssessmentIntro';
+import AssessmentTake from '../pages/student/AssessmentTake';
+import AssessmentResult from '../pages/student/AssessmentResult';
+import AssessmentHistory from '../pages/student/AssessmentHistory';
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -243,6 +246,48 @@ const AppRouter = () => {
                     <ProtectedRoute roles={['student']}>
                         <OnboardingGuard>
                             <StudentLayout><TopicDetailPage /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            {/* Assessment routes */}
+            <Route
+                path="/student/assessment/intro/:assessmentId"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AssessmentIntro /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/assessment/take/:attemptId"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            {/* Do not include the main layout sidebar while taking the test for full screen focus */}
+                            <AssessmentTake />
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/assessment/result/:attemptId"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AssessmentResult /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/assessment/history"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AssessmentHistory /></StudentLayout>
                         </OnboardingGuard>
                     </ProtectedRoute>
                 }

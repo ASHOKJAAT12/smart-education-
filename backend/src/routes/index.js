@@ -9,7 +9,7 @@ const resourceRoutes = require('./resourceRoutes');
 const questionRoutes = require('./questionRoutes');
 const quizRoutes = require('./quizRoutes');
 const studentRoutes = require('./studentRoutes');
-
+const assessmentRoutes = require('./assessmentRoutes');
 const router = express.Router();
 
 /**
@@ -31,6 +31,7 @@ router.use('/resources', resourceRoutes);
 router.use('/questions', questionRoutes);
 router.use('/quizzes', quizRoutes);
 router.use('/student', studentRoutes);
+router.use('/assessments', assessmentRoutes);
 
 module.exports = router;
 
