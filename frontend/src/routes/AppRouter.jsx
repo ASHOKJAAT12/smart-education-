@@ -33,6 +33,8 @@ import AssessmentResult from '../pages/student/AssessmentResult';
 import AssessmentHistory from '../pages/student/AssessmentHistory';
 import RecommendationsPage from '../pages/student/RecommendationsPage';
 import StudyPlan from '../pages/student/StudyPlan';
+import AITutor from '../pages/student/AITutor';
+import AIQuizGenerator from '../pages/student/AIQuizGenerator';
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -311,6 +313,37 @@ const AppRouter = () => {
                     <ProtectedRoute roles={['student']}>
                         <OnboardingGuard>
                             <StudentLayout><StudyPlan /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            {/* Phase 7 AI AI Routes */}
+            <Route
+                path="/student/ai-tutor"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AITutor /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/ai-tutor/:conversationId"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AITutor /></StudentLayout>
+                        </OnboardingGuard>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/generate-quiz"
+                element={
+                    <ProtectedRoute roles={['student']}>
+                        <OnboardingGuard>
+                            <StudentLayout><AIQuizGenerator /></StudentLayout>
                         </OnboardingGuard>
                     </ProtectedRoute>
                 }

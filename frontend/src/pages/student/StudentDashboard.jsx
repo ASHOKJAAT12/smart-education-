@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import {
     BookOpen, Target, Clock, ClipboardList, TrendingUp,
     CheckSquare, Zap, AlertCircle, ChevronRight, Sparkles,
+    CalendarDays, Bot, ArrowRight
 } from 'lucide-react';
 import { getDashboard } from '../../services/authService';
 import { assessmentService } from '../../services/assessmentService';
@@ -223,6 +224,65 @@ const StudentDashboard = () => {
                     </div>
                 </section>
             )}
+
+            {/* ── Phase 7 AI Assistant Panel ───────────── */}
+            <section>
+                <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-xl overflow-hidden relative">
+                    {/* Decorative blurred orbit background */}
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-violet-600/30 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+
+                    <div className="relative z-10">
+                        <div className="flex items-center mb-6">
+                            <div className="bg-violet-500/20 p-2 rounded-xl border border-violet-500/30 mr-3">
+                                <Bot className="w-6 h-6 text-violet-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white flex items-center">
+                                    Need Help? Ask AI Tutor <Sparkles className="w-4 h-4 ml-2 text-yellow-500 hidden sm:block" />
+                                </h2>
+                                <p className="text-sm text-slate-400 mt-1 max-w-sm">
+                                    Instant answers, topic summaries, and customized study plans mapped directly to your learning profile.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                            {topRecommendation && (
+                                <Link to={`/student/ai-tutor`} className="bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 p-4 rounded-xl transition-all group flex flex-col justify-between">
+                                    <div>
+                                        <p className="text-xs font-bold text-amber-500 uppercase tracking-wider mb-2">Priority Weakness</p>
+                                        <p className="font-semibold text-white group-hover:text-amber-400 transition-colors">
+                                            Explain {topRecommendation.topicId?.name}
+                                        </p>
+                                    </div>
+                                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 mt-4 ml-auto" />
+                                </Link>
+                            )}
+
+                            <Link to="/student/generate-quiz" className="bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 p-4 rounded-xl transition-all group flex flex-col justify-between">
+                                <div>
+                                    <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Practice</p>
+                                    <p className="font-semibold text-white group-hover:text-blue-300 transition-colors">
+                                        Generate AI Practice Quiz
+                                    </p>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-300 mt-4 ml-auto" />
+                            </Link>
+
+                            <Link to="/student/ai-tutor" className="bg-violet-600 hover:bg-violet-500 border border-violet-500 shadow-lg shadow-violet-500/20 p-4 rounded-xl transition-all group flex flex-col justify-between">
+                                <div>
+                                    <p className="text-xs font-bold text-violet-200 uppercase tracking-wider mb-2">General</p>
+                                    <p className="font-semibold text-white">
+                                        Open Full Tutor Interface
+                                    </p>
+                                </div>
+                                <Bot className="w-5 h-5 text-white/50 group-hover:text-white mt-4 ml-auto transition-colors" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             {/* ── Learning Area ──────────────────────────────────────────── */}
             <section>
