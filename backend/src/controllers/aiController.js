@@ -147,13 +147,13 @@ exports.postGenerateQuiz = asyncHandler(async (req, res) => {
             return {
                 subjectId: topic.subjectId,
                 topicId: topic._id,
-                title: q.question,
+                question: q.question,
                 options: sanitizedOpts,
-                correctAnswer: q.correctAnswer,
+                correctAnswer: Math.max(0, sanitizedOpts.indexOf(q.correctAnswer)),
                 explanation: q.explanation,
                 difficulty: q.difficulty || difficulty,
-                author: req.user._id, // Keep trace of who pushed the generation
-                isPublished: false,   // Student generated are private by default
+                createdBy: req.user._id, // Keep trace of who pushed the generation
+                isPublished: false,   // Private drafts by default
                 metadata: {
                     source: "ai",
                     reviewStatus: "generated"

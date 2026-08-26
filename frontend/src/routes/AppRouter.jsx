@@ -42,6 +42,15 @@ import FormalQuiz from '../pages/student/FormalQuiz';
 import QuizResult from '../pages/student/QuizResult';
 import StudentProgress from '../pages/student/StudentProgress';
 import QuizHistory from '../pages/student/QuizHistory';
+
+// Phase 9 - Teacher Environment
+import TeacherLayout from '../layouts/TeacherLayout';
+import TeacherDashboard from '../pages/teacher/TeacherDashboard';
+import CourseManager from '../pages/teacher/CourseManager';
+import QuestionBank from '../pages/teacher/QuestionBank';
+import StudentAnalytics from '../pages/teacher/StudentAnalytics';
+import TeacherAIAssistant from '../pages/teacher/TeacherAIAssistant';
+
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -367,15 +376,19 @@ const AppRouter = () => {
             {/* Catch-all for /student/* — redirect to dashboard */}
             <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
 
-            {/* ── Teacher (Phase 5) ───────────────────────────── */}
-            <Route
-                path="/teacher/*"
-                element={
-                    <ProtectedRoute roles={['teacher', 'admin']}>
-                        <PlaceholderDashboard role="teacher" />
-                    </ProtectedRoute>
-                }
-            />
+            {/* ── Teacher (Phase 9) ───────────────────────────── */}
+            <Route path="/teacher" element={
+                <ProtectedRoute roles={['teacher', 'admin']}>
+                    <TeacherLayout />
+                </ProtectedRoute>
+            }>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<TeacherDashboard />} />
+                <Route path="courses" element={<CourseManager />} />
+                <Route path="questions" element={<QuestionBank />} />
+                <Route path="students" element={<StudentAnalytics />} />
+                <Route path="ai-assistant" element={<TeacherAIAssistant />} />
+            </Route>
 
             {/* ── Admin (Phase 6) ─────────────────────────────── */}
             <Route

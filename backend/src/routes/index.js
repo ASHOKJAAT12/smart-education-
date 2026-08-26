@@ -14,6 +14,7 @@ const recommendationRoutes = require('./recommendationRoutes');
 const studyPlanRoutes = require('./studyPlanRoutes');
 const aiRoutes = require('./aiRoutes');
 const progressRoutes = require('./progressRoutes');
+const teacherRoutes = require('./teacherRoutes'); // Phase 9
 const router = express.Router();
 
 /**
