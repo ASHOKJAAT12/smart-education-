@@ -56,6 +56,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import UserManagement from '../pages/admin/UserManagement';
 import AuditLogs from '../pages/admin/AuditLogs';
+import SystemSettings from '../pages/admin/SystemSettings';
+import SystemModeration from '../pages/admin/SystemModeration';
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
@@ -214,8 +216,6 @@ const AppRouter = () => {
             />
 
             {/* ── Student (Phase 4) ───────────────────────────── */}
-
-            {/* Onboarding — accessible before onboarding is complete */}
             <Route
                 path="/student/onboarding"
                 element={
@@ -224,8 +224,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-
-            {/* All other student routes require onboarding */}
             <Route
                 path="/student/dashboard"
                 element={
@@ -256,7 +254,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-            {/* Direct intuitive alias for /student/courses tracking inside Layout instead of BaseLayout */}
             <Route
                 path="/student/courses"
                 element={
@@ -267,7 +264,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-            {/* Direct intuitive alias for /student/quizzes tracking inside Layout */}
             <Route
                 path="/student/quizzes"
                 element={
@@ -298,7 +294,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-            {/* Assessment routes */}
             <Route
                 path="/student/assessment/intro/:assessmentId"
                 element={
@@ -314,7 +309,6 @@ const AppRouter = () => {
                 element={
                     <ProtectedRoute roles={['student']}>
                         <OnboardingGuard>
-                            {/* Do not include the main layout sidebar while taking the test for full screen focus */}
                             <AssessmentTake />
                         </OnboardingGuard>
                     </ProtectedRoute>
@@ -340,7 +334,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-            {/* Phase 6 Recommendation Routes */}
             <Route
                 path="/student/recommendations"
                 element={
@@ -361,7 +354,6 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-            {/* Phase 7 AI AI Routes */}
             <Route
                 path="/student/ai-tutor"
                 element={
@@ -392,16 +384,12 @@ const AppRouter = () => {
                     </ProtectedRoute>
                 }
             />
-
-            {/* Phase 8 Adaptive Pipeline Routes */}
             <Route path="/student/topics/:topicId/learn" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><TopicLearningPage /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
             <Route path="/student/topics/:topicId/practice" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><PracticeMode /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
             <Route path="/student/quizzes/:quizId" element={<ProtectedRoute roles={['student']}><OnboardingGuard><FormalQuiz /></OnboardingGuard></ProtectedRoute>} />
             <Route path="/student/quizzes/:quizId/result/:attemptId" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><QuizResult /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
             <Route path="/student/progress" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><StudentProgress /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
             <Route path="/student/quiz-history" element={<ProtectedRoute roles={['student']}><OnboardingGuard><StudentLayout><QuizHistory /></StudentLayout></OnboardingGuard></ProtectedRoute>} />
-
-            {/* Catch-all for /student/* — redirect to dashboard */}
             <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
 
             {/* ── Teacher (Phase 9) ───────────────────────────── */}
@@ -428,9 +416,8 @@ const AppRouter = () => {
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="users" element={<UserManagement />} />
                 <Route path="audit-logs" element={<AuditLogs />} />
-                {/* Fallbacks for sub-items pending completion */}
-                <Route path="moderation" element={<Navigate to="dashboard" replace />} />
-                <Route path="settings" element={<Navigate to="dashboard" replace />} />
+                <Route path="moderation" element={<SystemModeration />} />
+                <Route path="settings" element={<SystemSettings />} />
             </Route>
 
             {/* ── Error pages ─────────────────────────────────── */}
