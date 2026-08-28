@@ -39,7 +39,7 @@ const features = [
         icon: <Users className="h-6 w-6" />,
         title: 'Teacher & Admin Tools',
         desc: 'Create quizzes, manage content, and monitor every student progress.',
-  },
+    },
     {
         icon: <CheckCircle className="h-6 w-6" />,
         title: 'Adaptive Quizzes',
@@ -100,8 +100,8 @@ const SystemStatus = () => {
                     <StatusRow
                         icon={<Database className="h-3.5 w-3.5" />}
                         label="Database"
-                        value={health.database.status}
-                        ok={health.database.connected}
+                        value={health.database?.status || 'Unknown'}
+                        ok={health.database?.connected || false}
                     />
                     <StatusRow
                         icon={<Zap className="h-3.5 w-3.5" />}
@@ -129,8 +129,8 @@ const StatusRow = ({ icon, label, value, ok }) => (
         </span>
         <span
             className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ok
-                    ? 'bg-emerald-500/10 text-emerald-400'
-                    : 'bg-red-500/10 text-red-400'
+                ? 'bg-emerald-500/10 text-emerald-400'
+                : 'bg-red-500/10 text-red-400'
                 }`}
         >
             <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-red-400'}`} />

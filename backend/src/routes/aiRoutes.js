@@ -2,23 +2,39 @@ const express = require('express');
 const aiController = require('../controllers/aiController');
 const { authenticateUser } = require('../middleware/authenticate');
 const authorizeRoles = require('../middleware/authorize');
-// A standard rate limiter mapping could be appended here sequentially.
+const { aiChatLimiter, aiGenerationLimiter } = require('../middleware/rateLimiters');
+const {
+    chatValidators,
+    conversationIdValidators,
+    summarizeValidators,
+    explainValidators,
+    generateQuizValidators,
+} = require('../validators/aiValidators');
 
 const router = express.Router();
 
+/**
+ * AI routes.
+ *
+ * Every route requires authentication. Conversation access is additionally
+ * scoped to the authenticated user inside the controller's query filters, so a
+ * valid token for student A cannot reach student B's conversations.
+ *
+ * Rate limits are per-user and tiered: chat is cheap-ish and frequent,
+ * generation is expensive and rare.
+ */
 router.use(authenticateUser);
-// Note: AI actions are universally open to students but tightly restricted to their user._id boundaries internally via Mongo lookups.
 router.use(authorizeRoles('student', 'teacher', 'admin'));
 
-// Conversational Endpoints 
-router.post('/chat', aiController.postChat);
+// ─── Conversation ──────────────────────────────────────────────────────────
+router.post('/chat', aiChatLimiter, chatValidators, aiController.postChat);
 router.get('/conversations', aiController.getConversations);
-router.get('/conversations/:id', aiController.getConversationById);
-router.delete('/conversations/:id', aiController.deleteConversation);
+router.get('/conversations/:id', conversationIdValidators, aiController.getConversationById);
+router.delete('/conversations/:id', conversationIdValidators, aiController.deleteConversation);
 
-// Educational Specialized Endpoints
-router.post('/summarize', aiController.postSummarize);
-router.post('/explain', aiController.postExplain);
-router.post('/generate-quiz', aiController.postGenerateQuiz);
+// ─── Generation (expensive) ────────────────────────────────────────────────
+router.post('/summarize', aiGenerationLimiter, summarizeValidators, aiController.postSummarize);
+router.post('/explain', aiGenerationLimiter, explainValidators, aiController.postExplain);
+router.post('/generate-quiz', aiGenerationLimiter, generateQuizValidators, aiController.postGenerateQuiz);
 
 module.exports = router;

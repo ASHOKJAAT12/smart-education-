@@ -1,186 +1,196 @@
 const Progress = require('../models/Progress');
 const Recommendation = require('../models/Recommendation');
-const Topic = require('../models/Topic');
 const User = require('../models/User');
 const StudyPlan = require('../models/StudyPlan');
 const AssessmentResult = require('../models/AssessmentResult');
+const masteryService = require('./mastery.service');
+const logger = require('../utils/logger');
+const { AppError } = require('../utils/AppError');
+const {
+    MASTERY_LEVELS,
+    RECOMMENDATION_LIMITS,
+    RECOMMENDATION_STATUS,
+} = require('../config/constants');
 
 /**
- * Normalizes mastery level from a score bounds.
+ * Recommendation Service — deterministic priority engine.
+ *
+ * Mastery classification is NOT duplicated here; it is imported from
+ * mastery.service so recommendations, dashboards and analytics agree.
  */
-const getMasteryLevel = (score) => {
-    if (score >= 80) return 'mastered';
-    if (score >= 60) return 'good';
-    if (score >= 40) return 'needs_improvement';
-    return 'weak';
-};
 
 /**
- * Calculates priority score iteratively based on mathematical signals.
- * @param {Object} progress - Document from Progress Model
- * @param {Object} user - User Object containing learning goals 
+ * Score how urgently a topic needs attention. Higher = more urgent.
+ * Pure function — easy to reason about and unit test.
+ *
+ * @param {object} progress Progress document (or plain object)
+ * @returns {{ priorityScore: number, reason: string, recommendedAction: string }}
  */
-const calculateTopicPriority = (progress, user) => {
-    let score = 100 - progress.masteryScore; // Base: weaker means higher priority
-    let reason = "This topic needs attention to build a solid foundation.";
-    let action = "Learn fundamentals";
+const calculateTopicPriority = (progress) => {
+    const masteryScore = progress.masteryScore || 0;
+    const level = masteryService.classifyMastery(masteryScore);
 
-    // Recency Decline weight: Recent is worse than average
-    if (progress.attemptCount > 0 && progress.recentAccuracy < progress.averageAccuracy - 10) {
-        score += 15;
-        reason = "Your recent performance in this topic has declined.";
-        action = "Revision practice";
+    let score = 100 - masteryScore; // weaker mastery ⇒ higher priority
+    let reason = 'This topic needs attention to build a solid foundation.';
+    let recommendedAction = 'Learn fundamentals';
+
+    const attempts = progress.attemptCount || 0;
+    const recent = progress.recentAccuracy || 0;
+    const average = progress.averageAccuracy || 0;
+
+    // Recent performance has declined versus lifetime accuracy.
+    if (attempts > 0 && recent < average - RECOMMENDATION_LIMITS.DECLINE_DELTA) {
+        score += RECOMMENDATION_LIMITS.DECLINE_BONUS;
+        reason = 'Your recent performance in this topic has declined.';
+        recommendedAction = 'Revision practice';
     }
 
-    // Struggle weight (High attempts, low accuracy)
-    if (progress.attemptCount >= 3 && progress.masteryScore < 50) {
-        score += 25;
-        reason = "You have struggled with this across multiple attempts.";
-        action = "Targeted conceptual review";
+    // Repeated attempts without reaching a passable mastery.
+    if (
+        attempts >= RECOMMENDATION_LIMITS.STRUGGLE_ATTEMPT_THRESHOLD &&
+        level === MASTERY_LEVELS.WEAK
+    ) {
+        score += RECOMMENDATION_LIMITS.STRUGGLE_BONUS;
+        reason = 'You have struggled with this across multiple attempts.';
+        recommendedAction = 'Targeted conceptual review';
     }
 
-    // Goal alignment (Mock alignment check for demonstration - would use tags/metadata in a real mapping)
-    // E.g., if learningGoal is "exam_prep", we bump up 'medium/hard' topics
-
-    // Prerequisite simulation (If it's a weak score, recommend fundamentals)
-    if (progress.masteryLevel === 'weak') {
-        action = "Learn fundamentals";
-    } else if (progress.masteryLevel === 'needs_improvement') {
-        action = "Practice standard questions";
-    } else if (progress.masteryLevel === 'good') {
-        action = "Attempt advanced challenges";
+    // Action guidance follows the canonical mastery band.
+    if (level === MASTERY_LEVELS.WEAK) {
+        recommendedAction = recommendedAction === 'Revision practice' ? recommendedAction : 'Learn fundamentals';
+    } else if (level === MASTERY_LEVELS.NEEDS_IMPROVEMENT) {
+        recommendedAction = 'Practice standard questions';
+    } else if (level === MASTERY_LEVELS.GOOD) {
+        recommendedAction = 'Attempt advanced challenges';
     } else {
-        score = Math.max(0, score - 50); // Heavily penalize priority if already mastered
-        reason = "You have mastered this, occasional revision recommended.";
-        action = "Quick Quiz";
+        // Mastered — keep it in rotation for retention only.
+        score = Math.max(0, score - RECOMMENDATION_LIMITS.MASTERED_PENALTY);
+        reason = 'You have mastered this — occasional revision keeps it fresh.';
+        recommendedAction = 'Quick Quiz';
     }
 
-    // Cap the score at 100 visually or let it exceed naturally as an absolute sorting bound.
-    return { priorityScore: Math.round(score), reason, recommendedAction: action };
+    return { priorityScore: Math.round(score), reason, recommendedAction };
 };
 
 /**
- * Main Recommendation Engine Loop. Call this when new data is persisted (i.e., after an assessment).
+ * Regenerate the student's active recommendation set from current Progress.
+ * Idempotent: safe to call after every scored activity.
+ *
+ * @param {string} studentId
+ * @returns {Promise<Array>} the persisted recommendations
  */
 const generateRecommendations = async (studentId) => {
-    const user = await User.findById(studentId);
-    if (!user) throw new Error('User not found');
+    // Lean read — we only need scoring fields, not full hydrated documents.
+    const progresses = await Progress.find({ studentId })
+        .select('topicId subjectId masteryScore attemptCount recentAccuracy averageAccuracy')
+        .lean();
 
-    const progresses = await Progress.find({ studentId }).populate('topicId');
-    if (!progresses || progresses.length === 0) return []; // Nothing to recommend until Assessment/Quiz is taken
+    if (!progresses.length) return [];
 
-    // Clear old active recommendations logically
-    await Recommendation.updateMany({ studentId, status: 'active' }, { status: 'discarded' });
+    const ranked = progresses
+        .filter((p) => p.topicId && p.subjectId)
+        .map((p) => ({ progress: p, ...calculateTopicPriority(p) }))
+        .sort((a, b) => b.priorityScore - a.priorityScore)
+        .slice(0, RECOMMENDATION_LIMITS.MAX_ACTIVE);
 
-    let calculatedRecs = progresses.map(p => {
-        const { priorityScore, reason, recommendedAction } = calculateTopicPriority(p, user);
-        return {
-            topicId: p.topicId._id,
-            subjectId: p.subjectId,
-            priorityScore,
-            reason,
-            recommendedAction,
-            // Pass Topic Name implicitly for ease of debugging internally if needed
-            topicName: p.topicId.name
-        };
-    });
+    if (!ranked.length) return [];
 
-    // Prerequisite processing: Sort by score DESC
-    calculatedRecs.sort((a, b) => b.priorityScore - a.priorityScore);
+    // Replace the active set atomically-ish: discard old, insert new.
+    await Recommendation.updateMany(
+        { studentId, status: RECOMMENDATION_STATUS.ACTIVE },
+        { $set: { status: RECOMMENDATION_STATUS.DISCARDED } }
+    );
 
-    // Limit to top 5 recommendations to prevent cognitive overload
-    const topRecs = calculatedRecs.slice(0, 5);
-
-    // Persist to DB
-    const recDocs = topRecs.map(rec => ({
+    const docs = ranked.map((rec) => ({
         studentId,
-        subjectId: rec.subjectId,
-        topicId: rec.topicId,
+        subjectId: rec.progress.subjectId,
+        topicId: rec.progress.topicId,
         priorityScore: rec.priorityScore,
         reason: rec.reason,
         recommendedAction: rec.recommendedAction,
-        status: 'active'
+        status: RECOMMENDATION_STATUS.ACTIVE,
     }));
 
-    await Recommendation.insertMany(recDocs);
-    return recDocs;
+    await Recommendation.insertMany(docs);
+    return docs;
 };
 
 /**
- * Updates or creates Progress documents from an Assessment Result payload.
- * Should be called asynchronously so as not to block typical http responses.
+ * Apply a diagnostic assessment result to Progress via the mastery service,
+ * then refresh recommendations.
+ *
+ * @param {string} resultId AssessmentResult._id
  */
 const updateProgressFromAssessment = async (resultId) => {
-    const result = await AssessmentResult.findById(resultId);
-    if (!result) return;
-
-    for (const tp of result.topicPerformance) {
-        // Upsert logic for Progress tracking
-        let progress = await Progress.findOne({ studentId: result.userId, topicId: tp.topicId });
-
-        if (!progress) {
-            progress = new Progress({
-                studentId: result.userId,
-                subjectId: result.subjectId || null,
-                topicId: tp.topicId,
-                masteryScore: tp.accuracy,
-                masteryLevel: tp.masteryLevel,
-                attemptCount: 1,
-                correctCount: tp.correct,
-                incorrectCount: tp.incorrect,
-                averageAccuracy: tp.accuracy,
-                recentAccuracy: tp.accuracy,
-                status: tp.accuracy >= 80 ? 'mastered' : 'needs_improvement',
-                firstAttemptAt: new Date(),
-                lastAttemptAt: new Date(),
-            });
-        } else {
-            // Update rolling averages
-            const newTotalTries = progress.attemptCount + 1;
-            const newTotalCorrect = progress.correctCount + tp.correct;
-            const newTotalIncorrect = progress.incorrectCount + tp.incorrect;
-
-            const totalQuestions = newTotalCorrect + newTotalIncorrect;
-            const newAvgAccuracy = totalQuestions > 0 ? (newTotalCorrect / totalQuestions) * 100 : 0;
-
-            progress.attemptCount = newTotalTries;
-            progress.correctCount = newTotalCorrect;
-            progress.incorrectCount = newTotalIncorrect;
-            progress.averageAccuracy = newAvgAccuracy;
-            progress.recentAccuracy = tp.accuracy;
-
-            // Recalculate Mastery Score (Weighted recent logic: 60% recent, 40% historical)
-            progress.masteryScore = (tp.accuracy * 0.6) + (progress.averageAccuracy * 0.4);
-            progress.masteryLevel = getMasteryLevel(progress.masteryScore);
-
-            progress.status = progress.masteryScore >= 80 ? 'mastered' : 'needs_improvement';
-            progress.lastAttemptAt = new Date();
-        }
-        await progress.save();
+    const result = await AssessmentResult.findById(resultId).lean();
+    if (!result) {
+        logger.warn('recommendation.assessment_result_missing', { resultId: String(resultId) });
+        return;
     }
 
-    // Regenerate recommendations with fresh data
-    await generateRecommendations(result.userId);
+    for (const tp of result.topicPerformance || []) {
+        const total = tp.totalQuestions || 0;
+        const correct = tp.correctAnswers || 0;
+
+        await masteryService.recordActivity({
+            studentId: result.studentId,
+            topicId: tp.topicId,
+            subjectId: result.subjectId,
+            correct,
+            incorrect: Math.max(0, total - correct),
+            scorePercentage: tp.accuracy,
+        });
+    }
+
+    // recordActivity already refreshes recommendations, but call once more so a
+    // multi-topic assessment ends with a single consistent ranking.
+    await generateRecommendations(result.studentId);
 };
 
+/** Map a recommended action string to a study-plan activity type. */
+const resolveActivityType = (recommendedAction = '') => {
+    const action = recommendedAction.toLowerCase();
+    if (action.includes('fundamental')) return 'learn';
+    if (action.includes('quiz')) return 'quiz';
+    if (action.includes('revision')) return 'revision';
+    return 'practice';
+};
+
+const todayKey = () => new Date().toISOString().split('T')[0];
+
 /**
- * Generates a bounded daily study plan automatically fitting the user's allowed `dailyStudyTime`.
+ * Get or create today's study plan.
+ *
+ * Important: an existing plan is NEVER regenerated. Student progress against
+ * plan items (completed / skipped) must survive page refreshes.
+ *
+ * @param {string} studentId
+ * @param {object} [options]
+ * @param {boolean} [options.force] Rebuild today's plan from scratch (explicit user action)
  */
-const generateDailyStudyPlan = async (studentId) => {
-    const user = await User.findById(studentId);
-    if (!user) throw new Error('User not found');
+const generateDailyStudyPlan = async (studentId, { force = false } = {}) => {
+    const user = await User.findById(studentId).select('dailyStudyTime').lean();
+    if (!user) throw new AppError('Student not found', 404);
 
-    const availableTime = user.dailyStudyTime || 60; // default 60
-    const today = new Date().toISOString().split('T')[0];
+    const availableTime = user.dailyStudyTime || 60;
+    const date = todayKey();
 
-    // Check if one already exists for today
-    let plan = await StudyPlan.findOne({ studentId, date: today });
-    if (plan) return plan;
+    const existing = await StudyPlan.findOne({ studentId, date });
+    if (existing && !force) return existing;
 
-    // Get active recommendations
-    const activeRecs = await Recommendation.find({ studentId, status: 'active' }).sort({ priorityScore: -1 }).populate('topicId');
-    if (activeRecs.length === 0) {
-        throw new Error('No active recommendations. Please take an assessment first.');
+    const activeRecs = await Recommendation.find({
+        studentId,
+        status: RECOMMENDATION_STATUS.ACTIVE,
+    })
+        .sort({ priorityScore: -1 })
+        .select('topicId recommendedAction priorityScore')
+        .lean();
+
+    if (!activeRecs.length) {
+        throw new AppError(
+            'No recommendations available yet. Complete a diagnostic assessment or a quiz first.',
+            409
+        );
     }
 
     const items = [];
@@ -189,57 +199,52 @@ const generateDailyStudyPlan = async (studentId) => {
 
     for (const rec of activeRecs) {
         if (timeRemaining <= 0) break;
-
-        // Allocate chunks based on priority
-        // Very high priority gets larger chunks, but capped to ensure variety.
         let duration = rec.priorityScore > 80 ? 30 : 20;
-        if (timeRemaining < duration) {
-            duration = timeRemaining;
-        }
-
-        // Determine activity type from recommendation action text logically
-        let activityType = 'practice';
-        if (rec.recommendedAction.includes('fundamentals')) activityType = 'learn';
-        else if (rec.recommendedAction.includes('Quiz')) activityType = 'quiz';
-        else if (rec.recommendedAction.includes('Revision')) activityType = 'revision';
+        if (timeRemaining < duration) duration = timeRemaining;
 
         items.push({
-            topicId: rec.topicId._id,
-            activityType,
+            topicId: rec.topicId,
+            activityType: resolveActivityType(rec.recommendedAction),
             durationMinutes: duration,
             order: order++,
-            status: 'pending'
+            status: 'pending',
         });
 
         timeRemaining -= duration;
     }
 
-    // Attempt to pad with practice if there is unused time remaining (say > 10 mins leftover)
-    if (timeRemaining >= 10 && activeRecs.length > 0) {
+    // Use any meaningful leftover time on the highest-priority topic.
+    if (timeRemaining >= 10) {
         items.push({
-            topicId: activeRecs[0].topicId._id, // Add final practice mapping to highest prio topic
+            topicId: activeRecs[0].topicId,
             activityType: 'practice',
             durationMinutes: timeRemaining,
             order: order++,
-            status: 'pending'
+            status: 'pending',
         });
     }
 
-    plan = new StudyPlan({
+    if (existing) {
+        existing.items = items;
+        existing.totalMinutes = availableTime;
+        existing.status = 'pending';
+        await existing.save();
+        return existing;
+    }
+
+    return StudyPlan.create({
         studentId,
-        date: today,
+        date,
         totalMinutes: availableTime,
         items,
-        status: 'pending'
+        status: 'pending',
     });
-
-    await plan.save();
-    return plan;
 };
 
-
 module.exports = {
-    updateProgressFromAssessment,
+    calculateTopicPriority,
     generateRecommendations,
-    generateDailyStudyPlan
+    updateProgressFromAssessment,
+    generateDailyStudyPlan,
+    todayKey,
 };

@@ -1,5 +1,4 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { register, login, logout, forgot, reset } = require('../controllers/authController');
 const {
     registerValidators,
@@ -8,44 +7,35 @@ const {
     resetPasswordValidators,
 } = require('../validators/authValidators');
 const { authenticateUser } = require('../middleware/authenticate');
+const {
+    loginLimiter,
+    registerLimiter,
+    passwordResetLimiter,
+} = require('../middleware/rateLimiters');
 
 const router = express.Router();
 
-// ─── Auth-specific rate limiters ──────────────────────────────────────────
-
-// Strict limiter for login/register: 10 attempts / 15 min per IP
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, error: 'Too many attempts. Please wait 15 minutes.' },
-});
-
-// Forgot password: 5 requests / hour per IP to prevent abuse
-const forgotLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 5,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, error: 'Too many reset requests. Please try again in an hour.' },
-});
-
-// ─── Routes ───────────────────────────────────────────────────────────────
+/**
+ * Auth routes.
+ *
+ * Rate limiters are defined centrally in middleware/rateLimiters.js so limits
+ * are consistent and tunable in one place. Login only counts *failed* attempts,
+ * so a legitimate user is never locked out by signing in normally.
+ */
 
 // POST /api/v1/auth/register
-router.post('/register', authLimiter, registerValidators, register);
+router.post('/register', registerLimiter, registerValidators, register);
 
 // POST /api/v1/auth/login
-router.post('/login', authLimiter, loginValidators, login);
+router.post('/login', loginLimiter, loginValidators, login);
 
 // POST /api/v1/auth/logout  (protected)
 router.post('/logout', authenticateUser, logout);
 
-// POST /api/v1/auth/forgot-password
-router.post('/forgot-password', forgotLimiter, forgotPasswordValidators, forgot);
+// POST /api/v1/auth/forgot-password — sends email, so tightly limited
+router.post('/forgot-password', passwordResetLimiter, forgotPasswordValidators, forgot);
 
-// POST /api/v1/auth/reset-password
-router.post('/reset-password', resetPasswordValidators, reset);
+// POST /api/v1/auth/reset-password — token guessing must also be throttled
+router.post('/reset-password', passwordResetLimiter, resetPasswordValidators, reset);
 
 module.exports = router;
