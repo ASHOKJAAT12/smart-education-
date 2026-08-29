@@ -47,6 +47,7 @@ import QuizHistory from '../pages/student/QuizHistory';
 import TeacherLayout from '../layouts/TeacherLayout';
 import TeacherDashboard from '../pages/teacher/TeacherDashboard';
 import CourseManager from '../pages/teacher/CourseManager';
+import TeacherCourseDetail from '../pages/teacher/TeacherCourseDetail';
 import QuestionBank from '../pages/teacher/QuestionBank';
 import StudentAnalytics from '../pages/teacher/StudentAnalytics';
 import TeacherAIAssistant from '../pages/teacher/TeacherAIAssistant';
@@ -401,6 +402,7 @@ const AppRouter = () => {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<TeacherDashboard />} />
                 <Route path="courses" element={<CourseManager />} />
+                <Route path="courses/:id" element={<TeacherCourseDetail />} />
                 <Route path="questions" element={<QuestionBank />} />
                 <Route path="students" element={<StudentAnalytics />} />
                 <Route path="ai-assistant" element={<TeacherAIAssistant />} />

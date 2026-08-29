@@ -20,6 +20,16 @@ const ensureConfigured = () => {
         err.statusCode = 503;
         throw err;
     }
+    // =========================================================================
+    // CRITICAL CLOUDINARY CONFIGURATION NOTICE:
+    // Cloudinary Free accounts STRICTLY block the delivery of PDFs by default 
+    // to prevent XSS attacks. If users see a "Failed to load PDF document" 
+    // error, the Admin MUST manually log in to the Cloudinary web dashboard -> 
+    // Settings -> Security -> and check "Allow delivery of PDF and ZIP files".
+    // 
+    // Do NOT attempt to artificially bypass this with `fl_attachment` URLs on 
+    // Free tiers as it will cause ERR_INVALID_RESPONSE structural errors.
+    // =========================================================================
     cloudinary.config({
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
@@ -45,6 +55,7 @@ const uploadFile = (buffer, options = {}) => {
         const uploadOptions = {
             folder: options.folder || 'smartlearn/resources',
             resource_type: options.resource_type || 'auto',
+            chunk_size: 6000000,
             ...(options.public_id && { public_id: options.public_id }),
         };
 
@@ -90,7 +101,7 @@ const uploadResource = (buffer, type) => {
     const resourceTypeMap = {
         image: 'image',
         video: 'video',
-        pdf: 'raw',
+        pdf: 'image',
         document: 'raw',
     };
     return uploadFile(buffer, {

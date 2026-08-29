@@ -67,8 +67,8 @@ const updateTopicValidators = [
 
 const createResourceValidators = [
     body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 150 }).withMessage('Max 150 characters'),
-    body('topicId').notEmpty().withMessage('topicId is required')
-        .custom(isValidObjectId).withMessage(objectIdMsg),
+    body('courseId').notEmpty().withMessage('courseId is required').custom(isValidObjectId).withMessage(objectIdMsg),
+    body('topicId').optional().custom((v) => !v || isValidObjectId(v)).withMessage(objectIdMsg),
     body('type').notEmpty().withMessage('Type is required')
         .isIn(['pdf', 'image', 'video', 'link', 'document']).withMessage('Must be pdf, image, video, link, or document'),
     body('url').if(body('type').equals('link')).isURL().withMessage('URL must be a valid URL for link resources'),
@@ -77,6 +77,8 @@ const createResourceValidators = [
 
 const updateResourceValidators = [
     body('title').optional().trim().isLength({ max: 150 }).withMessage('Max 150 characters'),
+    body('courseId').optional().custom(isValidObjectId).withMessage(objectIdMsg),
+    body('topicId').optional().custom((v) => !v || isValidObjectId(v)).withMessage(objectIdMsg),
     body('description').optional().trim().isLength({ max: 500 }).withMessage('Max 500 characters'),
     body('isPublished').optional().isBoolean().withMessage('isPublished must be a boolean'),
 ];

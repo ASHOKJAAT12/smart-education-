@@ -1,8 +1,8 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, BookOpen, BarChart2 } from 'lucide-react';
-import { getCourseById } from '../../services/educationService';
+import { ArrowLeft, BookOpen, BarChart2, FileText, Video, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
+import { getCourseById, getCourseMaterials } from '../../services/educationService';
 import SubjectCard from '../../components/education/SubjectCard';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
@@ -10,25 +10,38 @@ import EmptyState from '../../components/ui/EmptyState';
 const CourseDetailPage = () => {
     const { id } = useParams();
 
-    const { data, isLoading, isError } = useQuery({
+    const { data: courseData, isLoading: isCourseLoading, isError: isCourseError } = useQuery({
         queryKey: ['course', id],
         queryFn: () => getCourseById(id).then((r) => r.data.data),
     });
 
-    if (isLoading) return (
+    const { data: materials, isLoading: isMaterialsLoading } = useQuery({
+        queryKey: ['course-materials-public', id],
+        queryFn: () => getCourseMaterials(id).then(r => r.data.data),
+    });
+
+    if (isCourseLoading) return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
     );
 
-    if (isError) return (
+    if (isCourseError) return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400">
             Course not found or backend unavailable.
         </div>
     );
 
-    const course = data;
+    const course = courseData;
     const subjects = course?.subjects || [];
+
+    const TYPE_ICONS = {
+        pdf: FileText,
+        video: Video,
+        image: ImageIcon,
+        link: LinkIcon,
+        document: FileText
+    };
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -73,6 +86,45 @@ const CourseDetailPage = () => {
                         {subjects.map((subject) => (
                             <SubjectCard key={subject._id} subject={subject} courseId={id} />
                         ))}
+                    </div>
+                )}
+
+                {/* Course Materials */}
+                <h2 className="text-lg font-semibold text-white mb-4 mt-10 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-400" />
+                    Study Materials ({materials?.length || 0})
+                </h2>
+
+                {isMaterialsLoading ? (
+                    <div className="h-20 bg-slate-800/40 rounded-2xl animate-pulse" />
+                ) : !materials || materials.length === 0 ? (
+                    <EmptyState title="No materials" message="No study materials have been published for this course yet." />
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {materials.map((mat) => {
+                            const Icon = TYPE_ICONS[mat.type] || FileText;
+                            return (
+                                <a
+                                    key={mat._id}
+                                    href={mat.url}
+                                    data-noinstant
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/60 hover:border-indigo-500/50 rounded-2xl p-4 transition-colors flex items-start gap-4 group"
+                                >
+                                    <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center group-hover:bg-indigo-900/50 transition-colors">
+                                        <Icon className="w-6 h-6 text-indigo-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start gap-2 mb-1">
+                                            <h3 className="font-semibold text-slate-100 truncate">{mat.title}</h3>
+                                            <Badge variant="primary" className="text-[10px] uppercase">{mat.type}</Badge>
+                                        </div>
+                                        {mat.description && <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{mat.description}</p>}
+                                    </div>
+                                </a>
+                            );
+                        })}
                     </div>
                 )}
             </div>

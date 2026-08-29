@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { setAccessToken, clearAccessToken } from '../services/api';
+import api, { setAccessToken, clearAccessToken } from '../services/api';
 import { login as apiLogin, register as apiRegister, logout as apiLogout, getMe } from '../services/authService';
 
 /**
@@ -32,22 +32,43 @@ export const AuthProvider = ({ children }) => {
      */
     useEffect(() => {
         const restoreSession = async () => {
-            const storedToken = sessionStorage.getItem('sl_access_token');
-            if (storedToken) {
-                setAccessToken(storedToken);
-                try {
+            let storedToken = sessionStorage.getItem('sl_access_token');
+
+            try {
+                // If there's no stored token (e.g. they opened a new tab), try to fetch one using the httpOnly cookie
+                if (!storedToken) {
+                    const { data } = await api.get('/auth/refresh');
+                    storedToken = data.data.accessToken;
+                    sessionStorage.setItem('sl_access_token', storedToken);
+                    setAccessToken(storedToken);
+                }
+
+                if (storedToken) {
+                    setAccessToken(storedToken);
                     const { data } = await getMe();
                     setUser(data);
-                } catch {
-                    sessionStorage.removeItem('sl_access_token');
-                    clearAccessToken();
                 }
+            } catch (err) {
+                // Completely fine if they genuinely aren't logged in
+                sessionStorage.removeItem('sl_access_token');
+                clearAccessToken();
             }
+
             setLoading(false);
         };
 
         restoreSession();
-    }, []);
+
+        // Listen for global 401 interceptor events to enforce clean state
+        const handleForceLogout = () => {
+            clearAccessToken();
+            sessionStorage.removeItem('sl_access_token');
+            queryClient.clear();
+            setUser(null);
+        };
+        window.addEventListener('auth:logout', handleForceLogout);
+        return () => window.removeEventListener('auth:logout', handleForceLogout);
+    }, [queryClient]);
 
     /**
      * Log in with email + password.
@@ -113,4 +134,4 @@ export const useAuth = () => {
     return context;
 };
 
-export default AuthContext;
+

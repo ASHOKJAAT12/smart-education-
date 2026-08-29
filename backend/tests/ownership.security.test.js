@@ -108,6 +108,7 @@ const seedFixtures = async (teacherA) => {
         title: `${PREFIX} Rotation notes`,
         type: 'link',
         url: 'https://example.com/avl',
+        courseId: course._id,
         topicId: topic._id,
         uploadedBy: teacherA.user._id,
         isPublished: false,

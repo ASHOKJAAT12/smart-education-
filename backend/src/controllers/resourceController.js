@@ -5,11 +5,12 @@ const { validate } = require('../utils/validate');
 const { parsePagination, buildPaginationMeta, buildContentFilter } = require('../utils/queryHelper');
 const {
     isAdmin,
-    getOwnedTopicIds,
+    getAuthorizedCourse,
+    getAuthorizedSubject,
     getAuthorizedResource,
     getAuthorizedTopic,
 } = require('../utils/ownership');
-const { notFound } = require('../utils/AppError');
+const { notFound, badRequest } = require('../utils/AppError');
 const { uploadResource, deleteFile } = require('../services/cloudinaryService');
 
 // ─── GET /resources ────────────────────────────────────────────────────────
@@ -19,17 +20,21 @@ const getResources = asyncHandler(async (req, res) => {
     const publishedRequested = req.query.published !== undefined;
 
     if (req.ownerScoped && !isAdmin(req.user)) {
-        // Resources the teacher uploaded, or that hang off their own courses.
-        const topicIds = await getOwnedTopicIds(req.user);
+        // Resources the teacher uploaded, or that hang off their own courses. (Handled natively by courseId field)
+        const Subject = require('../models/Subject');
+        const Course = require('../models/Course');
+        const courseIds = (await Course.find({ createdBy: req.user._id }).select('_id').lean()).map(c => c._id);
+
         filter.$and = [
             ...(filter.$and || []),
-            { $or: [{ uploadedBy: req.user._id }, { topicId: { $in: topicIds } }] },
+            { $or: [{ uploadedBy: req.user._id }, { courseId: { $in: courseIds } }] },
         ];
         if (!publishedRequested) delete filter.isPublished;
     } else if (isAdmin(req.user)) {
         if (!publishedRequested) delete filter.isPublished;
     } else if (req.user && req.user.role === 'teacher') {
-        const topicIds = await getOwnedTopicIds(req.user);
+        const Course = require('../models/Course');
+        const courseIds = (await Course.find({ createdBy: req.user._id }).select('_id').lean()).map(c => c._id);
         delete filter.isPublished;
         filter.$and = [
             ...(filter.$and || []),
@@ -37,7 +42,7 @@ const getResources = asyncHandler(async (req, res) => {
                 $or: [
                     { isPublished: true },
                     { uploadedBy: req.user._id },
-                    { topicId: { $in: topicIds } },
+                    { courseId: { $in: courseIds } },
                 ],
             },
         ];
@@ -93,13 +98,30 @@ const createResource = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const { type, topicId, title, description } = req.body;
+    const { type, courseId, subjectId, topicId, title, description, order } = req.body;
     let url = req.body.url || null;
     let publicId = null;
 
-    // Resources may only be attached to a topic inside the teacher's own course.
-    // getAuthorizedTopic throws 404 for someone else's topic.
-    await getAuthorizedTopic(topicId, req.user);
+    if (!courseId) throw badRequest('Course ID is required');
+
+    // Authority over course
+    await getAuthorizedCourse(courseId, req.user);
+
+    // Structural validations to prevent tampering
+    if (subjectId) {
+        const Subject = require('../models/Subject');
+        const subject = await Subject.findById(subjectId);
+        if (!subject || subject.courseId.toString() !== courseId.toString()) throw badRequest('Invalid subject for this course');
+    }
+
+    if (topicId) {
+        const Topic = require('../models/Topic');
+        const Subject = require('../models/Subject');
+        const topic = await Topic.findById(topicId);
+        if (!topic) throw badRequest('Topic not found');
+        const subject = await Subject.findById(topic.subjectId);
+        if (!subject || subject.courseId.toString() !== courseId.toString()) throw badRequest('Invalid topic for this course');
+    }
 
     if (type === 'link') {
         // For links, URL must be provided in body — no file upload
@@ -126,7 +148,10 @@ const createResource = asyncHandler(async (req, res) => {
         type,
         url,
         publicId,
-        topicId,
+        courseId,
+        subjectId: subjectId || null,
+        topicId: topicId || null,
+        order: Number(order) || 0,
         uploadedBy: req.user._id,
         isPublished: false,
     });
@@ -142,18 +167,29 @@ const updateResource = asyncHandler(async (req, res) => {
     // Authority: uploader, or the owner of the parent course hierarchy.
     const resource = await getAuthorizedResource(req.params.id, req.user, { withPublicId: true });
 
-    const WHITELIST = ['title', 'description'];
+    const WHITELIST = ['title', 'description', 'courseId', 'subjectId', 'topicId', 'order', 'isPublished'];
+
+    // Check if new structural elements are valid
+    if (req.body.topicId) {
+        const Topic = require('../models/Topic');
+        const Subject = require('../models/Subject');
+        const topic = await Topic.findById(req.body.topicId);
+        const subject = topic ? await Subject.findById(topic.subjectId) : null;
+        if (!subject || subject.courseId.toString() !== (req.body.courseId || resource.courseId).toString()) {
+            throw badRequest('Invalid topic structure assignment');
+        }
+    }
+
     WHITELIST.forEach((field) => {
         if (req.body[field] !== undefined) resource[field] = req.body[field];
     });
 
-    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
-        resource.isPublished = req.body.isPublished;
-    }
-
     // Replace file if a new one is uploaded
     if (req.file) {
-        if (resource.publicId) await deleteFile(resource.publicId, resource.type === 'image' ? 'image' : 'raw').catch(() => { });
+        if (resource.publicId) {
+            const resType = resource.type === 'video' ? 'video' : (resource.type === 'document' ? 'raw' : 'image');
+            await deleteFile(resource.publicId, resType).catch(() => { });
+        }
         const uploaded = await uploadResource(req.file.buffer, resource.type);
         resource.url = uploaded.url;
         resource.publicId = uploaded.publicId;
@@ -169,7 +205,7 @@ const deleteResource = asyncHandler(async (req, res) => {
 
     // Clean up Cloudinary asset
     if (resource.publicId) {
-        const resType = resource.type === 'image' ? 'image' : resource.type === 'video' ? 'video' : 'raw';
+        const resType = resource.type === 'video' ? 'video' : (resource.type === 'document' ? 'raw' : 'image');
         await deleteFile(resource.publicId, resType).catch(() => { });
     }
 
@@ -177,4 +213,48 @@ const deleteResource = asyncHandler(async (req, res) => {
     return successResponse(res, null, 'Resource deleted');
 });
 
-module.exports = { getResources, getResourceById, createResource, updateResource, deleteResource };
+// ─── GET /courses/:courseId/materials ──────────────────────────────────────
+const getCourseMaterials = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    if (!courseId) throw badRequest('Course ID is required');
+
+    // Scoped resolution
+    if (req.ownerScoped && !isAdmin(req.user)) {
+        await getAuthorizedCourse(courseId, req.user);
+    }
+
+    const filter = { courseId };
+
+    // Students/Public routes hide anything not explicitly published.
+    // However, if the requested is ownerScoped, or requester is Admin, it shows EVERYTHING (Drafts + Published)
+    if (!req.ownerScoped && !isAdmin(req.user)) {
+        filter.isPublished = true;
+    }
+
+    const resources = await LearningResource.find(filter)
+        .select('-publicId')
+        .sort({ order: 1, createdAt: -1 });
+
+    return successResponse(res, resources, 'Course materials fetched');
+});
+
+// ─── PUBLISH TOGGLES ───────────────────────────────────────────────────────
+const togglePublish = asyncHandler(async (req, res, status) => {
+    const resource = await getAuthorizedResource(req.params.id, req.user);
+    resource.isPublished = status;
+    await resource.save();
+    return successResponse(res, { ...resource.toObject(), publicId: undefined }, `Resource ${status ? 'published' : 'unpublished'} successfully`);
+});
+const publishResource = (req, res) => togglePublish(req, res, true);
+const unpublishResource = (req, res) => togglePublish(req, res, false);
+
+module.exports = {
+    getResources,
+    getResourceById,
+    createResource,
+    updateResource,
+    deleteResource,
+    getCourseMaterials,
+    publishResource,
+    unpublishResource
+};

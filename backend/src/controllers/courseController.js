@@ -34,9 +34,10 @@ const getCourses = asyncHandler(async (req, res) => {
             { $or: [{ isPublished: true }, { createdBy: req.user._id }] },
         ];
     } else if (req.user && req.user.role === 'student') {
-        // Hackathon configuration (pre-existing): students may browse the whole
-        // catalogue during onboarding. Left unchanged deliberately.
-        delete filter.isPublished;
+        // Students MUST only see published courses.
+        if (!publishedRequested) {
+            filter.isPublished = true;
+        }
     }
 
     const [courses, total] = await Promise.all([
@@ -87,6 +88,7 @@ const getCourseById = asyncHandler(async (req, res) => {
     // Unpublished courses are visible to admins and to the owning teacher only.
     const ownerId = course.createdBy?._id || course.createdBy;
     const isOwner = req.user && ownerId && ownerId.toString() === req.user._id.toString();
+
     if (!course.isPublished && !isAdmin(req.user) && !isOwner) {
         const err = new Error('Course not found');
         err.statusCode = 404;
@@ -142,8 +144,8 @@ const updateCourse = asyncHandler(async (req, res) => {
         if (req.body[field] !== undefined) course[field] = req.body[field];
     });
 
-    // Only admins can publish
-    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
+    // Allow the authorized owner (teacher or admin) to publish/draft the course
+    if (req.body.isPublished !== undefined) {
         course.isPublished = req.body.isPublished;
     }
 

@@ -66,10 +66,13 @@ router.patch('/topics/:id', updateTopicValidators, topicController.updateTopic);
 router.delete('/topics/:id', topicController.deleteTopic);
 
 // Learning resources
+router.get('/courses/:courseId/materials', resourceController.getCourseMaterials);
 router.get('/resources', resourceController.getResources);
 router.get('/resources/:id', resourceController.getResourceById);
 router.post('/resources', uploadSingle('file'), createResourceValidators, resourceController.createResource);
 router.patch('/resources/:id', uploadSingle('file'), updateResourceValidators, resourceController.updateResource);
+router.patch('/resources/:id/publish', resourceController.publishResource);
+router.patch('/resources/:id/unpublish', resourceController.unpublishResource);
 router.delete('/resources/:id', resourceController.deleteResource);
 
 // Questions

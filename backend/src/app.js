@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 
 const routes = require('./routes/index');
 const notFound = require('./middleware/notFound');
@@ -101,6 +102,7 @@ if (IS_PROD) {
 // 1mb is ample for JSON payloads (quiz answers, AI prompts). File uploads go
 // through multer, which enforces its own limits. The previous 10mb ceiling made
 // memory-exhaustion attacks cheap.
+app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 

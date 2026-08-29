@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login, logout, forgot, reset } = require('../controllers/authController');
+const { register, login, logout, forgot, reset, refreshToken } = require('../controllers/authController');
 const {
     registerValidators,
     loginValidators,
@@ -31,6 +31,9 @@ router.post('/login', loginLimiter, loginValidators, login);
 
 // POST /api/v1/auth/logout  (protected)
 router.post('/logout', authenticateUser, logout);
+
+// GET /api/v1/auth/refresh
+router.get('/refresh', refreshToken);
 
 // POST /api/v1/auth/forgot-password — sends email, so tightly limited
 router.post('/forgot-password', passwordResetLimiter, forgotPasswordValidators, forgot);

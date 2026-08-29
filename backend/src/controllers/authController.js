@@ -7,6 +7,7 @@ const {
     logoutUser,
     forgotPassword,
     resetPassword,
+    refreshTokens,
 } = require('../services/authService');
 
 // ─── Register ─────────────────────────────────────────────────────────────
@@ -112,4 +113,30 @@ const reset = asyncHandler(async (req, res) => {
     return successResponse(res, null, 'Password reset successfully. Please log in.');
 });
 
-module.exports = { register, login, logout, forgot, reset };
+// ─── Refresh Token ────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/auth/refresh
+ * Validates httpOnly refresh cookie and issues a new access token.
+ */
+const refreshToken = asyncHandler(async (req, res) => {
+    const token = req.cookies?.refreshToken;
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Refresh token not found' });
+    }
+
+    const { user, accessToken, refreshToken: newRefreshToken } = await refreshTokens(token);
+
+    // Rotate refresh token
+    res.cookie('refreshToken', newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return successResponse(res, { user, accessToken }, 'Token refreshed');
+});
+
+module.exports = { register, login, logout, forgot, reset, refreshToken };

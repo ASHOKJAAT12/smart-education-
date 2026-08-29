@@ -32,10 +32,18 @@ const learningResourceSchema = new mongoose.Schema(
             default: null,
             select: false,
         },
+        courseId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Course',
+            required: [true, 'Course ID is required'],
+        },
+        subjectId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Subject',
+        },
         topicId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Topic',
-            required: [true, 'Topic ID is required'],
         },
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
@@ -46,11 +54,17 @@ const learningResourceSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        order: {
+            type: Number,
+            default: 0,
+        },
     },
     { timestamps: true }
 );
 
 // ─── Indexes ──────────────────────────────────────────────────────────────
+learningResourceSchema.index({ courseId: 1 });
+learningResourceSchema.index({ subjectId: 1 });
 learningResourceSchema.index({ topicId: 1 });
 learningResourceSchema.index({ type: 1 });
 learningResourceSchema.index({ isPublished: 1 });

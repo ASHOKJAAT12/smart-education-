@@ -98,10 +98,10 @@ const ManageCoursesPage = () => {
                             </div>
                             <div className="flex items-center gap-2 ml-2">
                                 <Link
-                                    to={`/courses/${course._id}`}
+                                    to={`/teacher/courses/${course._id}`}
                                     className="text-xs text-slate-400 hover:text-violet-400 border border-slate-600 hover:border-violet-500/50 px-2.5 py-1.5 rounded-lg transition-colors"
                                 >
-                                    View
+                                    Manage
                                 </Link>
                                 <button
                                     onClick={() => handleDelete(course)}

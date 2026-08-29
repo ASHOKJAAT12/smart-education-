@@ -78,6 +78,7 @@ const TopicDetailPage = () => {
                                     <a
                                         key={res._id}
                                         href={res.url}
+                                        data-noinstant
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 hover:border-violet-500/50 transition-all"

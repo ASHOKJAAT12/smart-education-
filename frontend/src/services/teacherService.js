@@ -43,5 +43,13 @@ export const teacherService = {
     updateQuiz: (id, data) => api.patch(`/teacher/quizzes/${id}`, data),
     deleteQuiz: (id) => api.delete(`/teacher/quizzes/${id}`),
 
+    // ─── Materials ───────────────────────────────────────────────────────────
+    getCourseMaterials: (courseId) => api.get(`/teacher/courses/${courseId}/materials`),
+    createMaterial: (formData) => api.post('/teacher/resources', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    updateMaterial: (id, formData) => api.patch(`/teacher/resources/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    deleteMaterial: (id) => api.delete(`/teacher/resources/${id}`),
+    publishMaterial: (id) => api.patch(`/teacher/resources/${id}/publish`),
+    unpublishMaterial: (id) => api.patch(`/teacher/resources/${id}/unpublish`),
+
     generateQuestions: (data) => api.post('/ai/generate-quiz', data), // ownership bound to the caller's token
 };

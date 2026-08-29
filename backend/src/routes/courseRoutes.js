@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getCourses, getCourseById, createCourse, updateCourse, deleteCourse } = require('../controllers/courseController');
+const { getCourseMaterials } = require('../controllers/resourceController');
 const { authenticateUser } = require('../middleware/authenticate');
 const authorizeRoles = require('../middleware/authorize');
 const { optionalAuth } = require('../middleware/authenticate');
@@ -10,6 +11,7 @@ const { createCourseValidators, updateCourseValidators } = require('../validator
 // Public (with optional auth to determine visibility)
 router.get('/', optionalAuth, getCourses);
 router.get('/:id', optionalAuth, getCourseById);
+router.get('/:courseId/materials', optionalAuth, getCourseMaterials);
 
 // Teacher + Admin only
 router.post(

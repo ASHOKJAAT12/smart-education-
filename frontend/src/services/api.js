@@ -15,7 +15,6 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 15000,
 });
 
 // ─── In-memory access token store ─────────────────────────────────────────
@@ -36,16 +35,80 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+
+    failedQueue = [];
+};
+
 // ─── Response Interceptor ─────────────────────────────────────────────────
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const original = error.config;
 
-        // Silent token refresh on 401 (Phase 2 will fully implement this)
         if (error.response?.status === 401 && !original._retry) {
+            // If the failure is from the refresh endpoint itself, we must abort
+            if (original.url.includes('/auth/refresh')) {
+                window.dispatchEvent(new Event('auth:logout'));
+                return Promise.reject(error);
+            }
+
             original._retry = true;
-            // Phase 2: attempt refresh here
+
+            if (isRefreshing) {
+                // If a refresh is already in progress, queue this request
+                return new Promise(function (resolve, reject) {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then(token => {
+                        original.headers.Authorization = `Bearer ${token}`;
+                        return api(original);
+                    })
+                    .catch(err => {
+                        return Promise.reject(err);
+                    });
+            }
+
+            isRefreshing = true;
+
+            try {
+                // Call the new refresh endpoint
+                const { data } = await axios.get(`${BASE_URL}/api/v1/auth/refresh`, {
+                    withCredentials: true // Extremely important to send httpOnly cookie
+                });
+
+                const newAccessToken = data.data.accessToken;
+
+                // Update in-memory token
+                setAccessToken(newAccessToken);
+                // The SessionStorage backup used for cross-tab or initial boot
+                sessionStorage.setItem('sl_access_token', newAccessToken);
+
+                api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+                original.headers.Authorization = `Bearer ${newAccessToken}`;
+
+                // Process the queued requests
+                processQueue(null, newAccessToken);
+
+                return api(original);
+            } catch (err) {
+                // Refresh failed completely
+                processQueue(err, null);
+                window.dispatchEvent(new Event('auth:logout'));
+                return Promise.reject(err);
+            } finally {
+                isRefreshing = false;
+            }
         }
 
         // Normalise error message

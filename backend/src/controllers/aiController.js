@@ -4,8 +4,10 @@ const { validate } = require('../utils/validate');
 const aiService = require('../services/ai/ai.service');
 const AIConversation = require('../models/AIConversation');
 const Topic = require('../models/Topic');
+const Subject = require('../models/Subject');
 const Progress = require('../models/Progress');
 const Question = require('../models/Question');
+const { isAdmin, ownsCourse, getAuthorizedTopic } = require('../utils/ownership');
 const logger = require('../utils/logger');
 const { AppError, notFound, badRequest, serviceUnavailable } = require('../utils/AppError');
 const { sanitizePrompt, validateGeneratedBatch } = require('../utils/aiGuard');
@@ -39,6 +41,23 @@ const toSafeAiError = (err, operation, context) => {
             : 'The AI assistant is temporarily unavailable. Your learning progress is unaffected.',
         notConfigured ? ERROR_CODES.AI_NOT_CONFIGURED : ERROR_CODES.AI_UNAVAILABLE
     );
+};
+
+/** Ensure user is permitted to extract contextual information about a topic. */
+const checkTopicAccess = async (topicId, user) => {
+    const topic = await Topic.findById(topicId).select('name description difficulty subjectId isPublished').lean();
+    if (!topic) throw notFound('Topic');
+
+    if (isAdmin(user)) return topic;
+
+    if (!topic.isPublished) {
+        if (user?.role === 'student') throw notFound('Topic');
+        const subject = await Subject.findById(topic.subjectId).select('courseId').lean();
+        if (!subject || !(await ownsCourse(subject.courseId, user))) {
+            throw notFound('Topic');
+        }
+    }
+    return topic;
 };
 
 // ─── POST /ai/chat ─────────────────────────────────────────────────────────
@@ -84,7 +103,7 @@ exports.postChat = asyncHandler(async (req, res) => {
     let progressData = null;
     if (conversation.topicId) {
         [topicData, progressData] = await Promise.all([
-            Topic.findById(conversation.topicId).select('name description difficulty').lean(),
+            checkTopicAccess(conversation.topicId, req.user),
             Progress.findOne({ studentId: req.user._id, topicId: conversation.topicId })
                 .select('masteryScore masteryLevel attemptCount')
                 .lean(),
@@ -160,8 +179,7 @@ exports.postSummarize = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const topic = await Topic.findById(req.body.topicId).select('name description difficulty').lean();
-    if (!topic) throw notFound('Topic');
+    const topic = await checkTopicAccess(req.body.topicId, req.user);
 
     try {
         const summary = await aiService.summarizeTopic(topic);
@@ -179,8 +197,7 @@ exports.postExplain = asyncHandler(async (req, res) => {
     const { text: concept } = sanitizePrompt(req.body.concept, AI_LIMITS.MAX_CONCEPT_CHARS);
     if (!concept) throw badRequest('Please describe the concept you want explained.');
 
-    const topic = await Topic.findById(req.body.topicId).select('name description difficulty').lean();
-    if (!topic) throw notFound('Topic');
+    const topic = await checkTopicAccess(req.body.topicId, req.user);
 
     // Current mastery drives the explanation depth.
     const progressData = await Progress.findOne({ studentId: req.user._id, topicId: topic._id })
@@ -208,8 +225,7 @@ exports.postGenerateQuiz = asyncHandler(async (req, res) => {
     const requested = Number(req.body.questionCount) || 5;
     const questionCount = Math.min(Math.max(requested, AI_LIMITS.MIN_QUESTION_COUNT), AI_LIMITS.MAX_QUESTION_COUNT);
 
-    const topic = await Topic.findById(req.body.topicId).select('name description subjectId difficulty').lean();
-    if (!topic) throw notFound('Topic');
+    const topic = await getAuthorizedTopic(req.body.topicId, req.user);
 
     let generated;
     try {

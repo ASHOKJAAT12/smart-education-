@@ -159,4 +159,42 @@ const resetPassword = async (plainToken, newPassword) => {
     await user.save();
 };
 
-module.exports = { registerUser, loginUser, logoutUser, forgotPassword, resetPassword };
+// ─── Refresh Token ────────────────────────────────────────────────────────
+/**
+ * Validate refresh token and issue new token pair.
+ * @param {string} token - refresh token from httpOnly cookie
+ */
+const refreshTokens = async (token) => {
+    let decoded;
+    try {
+        decoded = verifyRefreshToken(token);
+    } catch (err) {
+        const error = new Error('Refresh token is invalid or expired.');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const user = await User.findById(decoded.id).select('+refreshToken');
+    if (!user || !user.refreshToken) {
+        const error = new Error('Invalid session.');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const isMatch = await bcrypt.compare(token, user.refreshToken);
+    if (!isMatch) {
+        const error = new Error('Session compromised or invalid.');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const accessToken = signAccessToken({ id: user._id, role: user.role });
+    const refreshToken = signRefreshToken({ id: user._id });
+
+    user.refreshToken = await bcrypt.hash(refreshToken, 10);
+    await user.save({ validateBeforeSave: false });
+
+    return { user: user.toSafeObject(), accessToken, refreshToken };
+};
+
+module.exports = { registerUser, loginUser, logoutUser, forgotPassword, resetPassword, refreshTokens };

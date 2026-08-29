@@ -63,7 +63,7 @@ const TopicLearningPage = () => {
                         {resources?.length > 0 ? (
                             <div className="grid grid-cols-1 gap-4">
                                 {resources.map((res, i) => (
-                                    <a key={i} href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-start p-4 bg-slate-50 hover:bg-violet-50 transition border border-slate-200 rounded-xl group">
+                                    <a key={i} href={res.url} data-noinstant target="_blank" rel="noopener noreferrer" className="flex items-start p-4 bg-slate-50 hover:bg-violet-50 transition border border-slate-200 rounded-xl group">
                                         <PlayCircle className="w-8 h-8 text-violet-500 mr-4 flex-shrink-0 group-hover:scale-110 transition-transform" />
                                         <div>
                                             <h3 className="font-bold text-slate-800">{res.title}</h3>

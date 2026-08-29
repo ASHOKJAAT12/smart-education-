@@ -124,11 +124,16 @@ const getAuthorizedResource = async (resourceId, user, { withPublicId = false } 
 
     if (resource.uploadedBy?.toString() === user._id.toString()) return resource;
 
-    // Inherit authority from Topic → Subject → Course.
-    const topic = await Topic.findById(resource.topicId).select('subjectId');
-    if (topic) {
-        const subject = await Subject.findById(topic.subjectId).select('courseId');
-        if (subject && (await ownsCourse(subject.courseId, user))) return resource;
+    // Inherit authority directly from the Course.
+    if (resource.courseId && (await ownsCourse(resource.courseId, user))) return resource;
+
+    // Fallback for older legacy schema resources lacking explicit courseId.
+    if (resource.topicId) {
+        const topic = await Topic.findById(resource.topicId).select('subjectId');
+        if (topic) {
+            const subject = await Subject.findById(topic.subjectId).select('courseId');
+            if (subject && (await ownsCourse(subject.courseId, user))) return resource;
+        }
     }
 
     throw notFound('Resource');
