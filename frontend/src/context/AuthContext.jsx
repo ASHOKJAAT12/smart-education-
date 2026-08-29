@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { setAccessToken, clearAccessToken } from '../services/api';
 import { login as apiLogin, register as apiRegister, logout as apiLogout, getMe } from '../services/authService';
 
@@ -16,6 +17,7 @@ import { login as apiLogin, register as apiRegister, logout as apiLogout, getMe 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
+    const queryClient = useQueryClient();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true); // true while restoring session
 
@@ -80,8 +82,9 @@ export const AuthProvider = ({ children }) => {
         }
         clearAccessToken();
         sessionStorage.removeItem('sl_access_token');
+        queryClient.clear();
         setUser(null);
-    }, []);
+    }, [queryClient]);
 
     /**
      * Refresh user data from the server.

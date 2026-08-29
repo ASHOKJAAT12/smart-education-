@@ -74,6 +74,11 @@ const buildContentFilter = (query, defaults = {}) => {
 
 /**
  * Check ownership: returns true if the user is admin OR owns the resource.
+ *
+ * @deprecated Prefer the helpers in utils/ownership.js. They resolve authority
+ * through the content hierarchy (Course → Subject → Topic → Resource) and put
+ * ownership inside the database query, which this function cannot do.
+ *
  * @param {object} resource - Mongoose document with createdBy or uploadedBy
  * @param {object} user - req.user
  */

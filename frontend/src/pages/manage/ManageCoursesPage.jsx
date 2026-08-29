@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Eye, EyeOff, BookOpen, LayoutDashboard } from 'lucide-react';
-import { getCourses, deleteCourse } from '../../services/educationService';
+import { teacherService } from '../../services/teacherService';
 import { useAuth } from '../../context/AuthContext';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
@@ -12,14 +12,15 @@ const ManageCoursesPage = () => {
     const queryClient = useQueryClient();
     const isAdmin = user?.role === 'admin';
 
-    // Teachers see their own courses; admins see all (published=all)
+    // The teacher-scoped endpoint already restricts the payload to courses the
+    // caller owns (admins receive all). Never filter ownership on the client.
     const { data, isLoading } = useQuery({
         queryKey: ['manage-courses'],
-        queryFn: () => getCourses({ published: 'all', limit: 50 }).then((r) => r.data),
+        queryFn: () => teacherService.getTeacherCourses({ limit: 50 }).then((r) => r.data),
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id) => deleteCourse(id),
+        mutationFn: (id) => teacherService.deleteCourse(id),
         onSuccess: () => queryClient.invalidateQueries(['manage-courses']),
     });
 
@@ -30,7 +31,6 @@ const ManageCoursesPage = () => {
     };
 
     const courses = data?.data || [];
-    const myDisplay = isAdmin ? courses : courses.filter((c) => c.createdBy?._id === user?._id);
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -59,7 +59,7 @@ const ManageCoursesPage = () => {
                     </div>
                 )}
 
-                {!isLoading && myDisplay.length === 0 && (
+                {!isLoading && courses.length === 0 && (
                     <EmptyState
                         icon={BookOpen}
                         title="No courses yet"
@@ -73,7 +73,7 @@ const ManageCoursesPage = () => {
                 )}
 
                 <div className="space-y-3">
-                    {myDisplay.map((course) => (
+                    {courses.map((course) => (
                         <div key={course._id} className="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
                             <div className="flex items-center gap-3 min-w-0">
                                 {course.thumbnail ? (

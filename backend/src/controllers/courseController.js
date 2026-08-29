@@ -2,18 +2,42 @@ const asyncHandler = require('../middleware/asyncHandler');
 const Course = require('../models/Course');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
 const { validate } = require('../utils/validate');
-const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const { parsePagination, buildPaginationMeta, buildContentFilter } = require('../utils/queryHelper');
+const { ownerFilter, isAdmin, getAuthorizedCourse } = require('../utils/ownership');
 const { uploadThumbnail, deleteFile } = require('../services/cloudinaryService');
 
 // ─── GET /courses ──────────────────────────────────────────────────────────
+/**
+ * Visibility rules:
+ *  - owner-scoped request (teacher management, e.g. GET /teacher/courses):
+ *      only courses owned by the authenticated user, drafts included.
+ *  - admin: everything.
+ *  - teacher browsing the catalogue: published courses plus their own drafts —
+ *      never another teacher's unpublished content.
+ *  - student / anonymous: existing student-access policy, unchanged.
+ */
 const getCourses = asyncHandler(async (req, res) => {
     const pagination = parsePagination(req.query);
+    const filter = buildContentFilter(req.query, {});
+    const publishedRequested = req.query.published !== undefined;
 
-    // Hackathon configuration: Allow fetching all courses for seamless Onboarding 
-    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher' || req.user.role === 'student');
-    const defaults = canSeeAll ? {} : { isPublished: true };
-    const filter = buildContentFilter(req.query, defaults);
-    if (canSeeAll) delete filter.isPublished;
+    if (req.ownerScoped) {
+        // Ownership comes from the authenticated user only — never from the query.
+        Object.assign(filter, ownerFilter(req.user));
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (isAdmin(req.user)) {
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (req.user && req.user.role === 'teacher') {
+        delete filter.isPublished;
+        filter.$and = [
+            ...(filter.$and || []),
+            { $or: [{ isPublished: true }, { createdBy: req.user._id }] },
+        ];
+    } else if (req.user && req.user.role === 'student') {
+        // Hackathon configuration (pre-existing): students may browse the whole
+        // catalogue during onboarding. Left unchanged deliberately.
+        delete filter.isPublished;
+    }
 
     const [courses, total] = await Promise.all([
         Course.find(filter)
@@ -30,6 +54,21 @@ const getCourses = asyncHandler(async (req, res) => {
 
 // ─── GET /courses/:id ──────────────────────────────────────────────────────
 const getCourseById = asyncHandler(async (req, res) => {
+    // Owner-scoped detail (teacher management): ownership is part of the query,
+    // so another teacher's course is indistinguishable from a missing one.
+    if (req.ownerScoped) {
+        const owned = await getAuthorizedCourse(req.params.id, req.user, { select: '-publicId' });
+        await owned.populate([
+            { path: 'createdBy', select: 'firstName lastName' },
+            {
+                path: 'subjects',
+                select: 'name description order isPublished',
+                options: { sort: { order: 1 } },
+            },
+        ]);
+        return successResponse(res, owned, 'Course fetched');
+    }
+
     const course = await Course.findById(req.params.id)
         .select('-publicId')
         .populate('createdBy', 'firstName lastName')
@@ -45,9 +84,10 @@ const getCourseById = asyncHandler(async (req, res) => {
         throw err;
     }
 
-    // Students can only see published courses
-    const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    if (!course.isPublished && !isPrivileged) {
+    // Unpublished courses are visible to admins and to the owning teacher only.
+    const ownerId = course.createdBy?._id || course.createdBy;
+    const isOwner = req.user && ownerId && ownerId.toString() === req.user._id.toString();
+    if (!course.isPublished && !isAdmin(req.user) && !isOwner) {
         const err = new Error('Course not found');
         err.statusCode = 404;
         throw err;
@@ -71,8 +111,15 @@ const createCourse = asyncHandler(async (req, res) => {
         publicId = uploaded.publicId;
     }
 
+    // Only whitelisted fields are accepted. A client-supplied createdBy is
+    // ignored: the authenticated user always becomes the owner.
+    const { title, description, category, level } = req.body;
+
     const course = await Course.create({
-        ...req.body,
+        title,
+        description,
+        category,
+        level,
         thumbnail,
         publicId,
         isPublished: false, // always start unpublished
@@ -87,18 +134,8 @@ const updateCourse = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const course = await Course.findById(req.params.id);
-    if (!course) {
-        const err = new Error('Course not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(course, req.user)) {
-        const err = new Error('You do not have permission to edit this course');
-        err.statusCode = 403;
-        throw err;
-    }
+    // Ownership is enforced inside the query, so knowing an id is not enough.
+    const course = await getAuthorizedCourse(req.params.id, req.user, { select: '+publicId' });
 
     const WHITELIST = ['title', 'description', 'category', 'level'];
     WHITELIST.forEach((field) => {
@@ -106,7 +143,7 @@ const updateCourse = asyncHandler(async (req, res) => {
     });
 
     // Only admins can publish
-    if (req.body.isPublished !== undefined && req.user.role === 'admin') {
+    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
         course.isPublished = req.body.isPublished;
     }
 
@@ -125,18 +162,7 @@ const updateCourse = asyncHandler(async (req, res) => {
 
 // ─── DELETE /courses/:id ───────────────────────────────────────────────────
 const deleteCourse = asyncHandler(async (req, res) => {
-    const course = await Course.findById(req.params.id).select('+publicId');
-    if (!course) {
-        const err = new Error('Course not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(course, req.user)) {
-        const err = new Error('You do not have permission to delete this course');
-        err.statusCode = 403;
-        throw err;
-    }
+    const course = await getAuthorizedCourse(req.params.id, req.user, { select: '+publicId' });
 
     if (course.publicId) await deleteFile(course.publicId, 'image').catch(() => { });
     await course.deleteOne();

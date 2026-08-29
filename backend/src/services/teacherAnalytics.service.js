@@ -1,17 +1,41 @@
 const Course = require('../models/Course');
+const Subject = require('../models/Subject');
 const User = require('../models/User');
 const Quiz = require('../models/Quiz');
 const Topic = require('../models/Topic');
+const LearningResource = require('../models/LearningResource');
 const Progress = require('../models/Progress');
 const QuizAttempt = require('../models/QuizAttempt');
 
+/**
+ * Teacher analytics are scoped to the courses the teacher owns.
+ *
+ * Scope is always resolved from Course.createdBy and then walked down the
+ * hierarchy (Course → Subject → Topic → Resource), so metrics can never include
+ * another teacher's classrooms even if a document's own `createdBy` differs
+ * (e.g. content created by an admin inside the teacher's course).
+ */
 class TeacherAnalyticsService {
     /**
      * Get the master list of courses owned by a teacher.
      */
     async getTeacherCourseIds(teacherId) {
-        const courses = await Course.find({ createdBy: teacherId }).select('_id');
+        const courses = await Course.find({ createdBy: teacherId }).select('_id').lean();
         return courses.map(c => c._id);
+    }
+
+    /** Subjects under the teacher's own courses. */
+    async getTeacherSubjectIds(teacherId) {
+        const courseIds = await this.getTeacherCourseIds(teacherId);
+        const subjects = await Subject.find({ courseId: { $in: courseIds } }).select('_id').lean();
+        return subjects.map(s => s._id);
+    }
+
+    /** Topics under the teacher's own courses. */
+    async getTeacherTopicIds(teacherId) {
+        const subjectIds = await this.getTeacherSubjectIds(teacherId);
+        const topics = await Topic.find({ subjectId: { $in: subjectIds } }).select('_id').lean();
+        return topics.map(t => t._id);
     }
 
     /**
@@ -19,17 +43,13 @@ class TeacherAnalyticsService {
      */
     async getDashboardMetrics(teacherId) {
         const courseIds = await this.getTeacherCourseIds(teacherId);
+        const topicIds = await this.getTeacherTopicIds(teacherId);
 
-        const [studentsCount, activeQuizzes, topics] = await Promise.all([
+        const [studentsCount, activeQuizzes, publishedResources] = await Promise.all([
             User.countDocuments({ role: 'student', course: { $in: courseIds } }),
             Quiz.countDocuments({ createdBy: teacherId, isPublished: true }),
-            Topic.find({ createdBy: teacherId }).select('resources')
+            LearningResource.countDocuments({ topicId: { $in: topicIds }, isPublished: true }),
         ]);
-
-        let publishedResources = 0;
-        topics.forEach(t => {
-            if (t.resources) publishedResources += t.resources.length;
-        });
 
         return {
             courses: courseIds.length,
@@ -43,7 +63,10 @@ class TeacherAnalyticsService {
      * Identify the lowest mastery topics under the teacher's jurisdiction
      */
     async getMostDifficultTopics(teacherId) {
-        const topics = await Topic.find({ createdBy: teacherId }).select('_id title subjectId');
+        const subjectIds = await this.getTeacherSubjectIds(teacherId);
+        const topics = await Topic.find({ subjectId: { $in: subjectIds } })
+            .select('_id name subjectId')
+            .lean();
         if (!topics.length) return [];
 
         const topicIds = topics.map(t => t._id);
@@ -65,7 +88,8 @@ class TeacherAnalyticsService {
             const topicMeta = topics.find(t => t._id.toString() === aggr._id.toString());
             return {
                 topicId: aggr._id,
-                title: topicMeta ? topicMeta.title : 'Unknown Topic',
+                // Topic documents store the label in `name`.
+                title: topicMeta ? topicMeta.name : 'Unknown Topic',
                 averageMastery: Math.round(aggr.averageMastery),
                 studentsCount: aggr.studentsCount
             };
@@ -77,6 +101,7 @@ class TeacherAnalyticsService {
      */
     async getStudentPerformance(teacherId) {
         const courseIds = await this.getTeacherCourseIds(teacherId);
+        const topicIds = await this.getTeacherTopicIds(teacherId);
 
         // Find all students in teacher's courses
         const students = await User.find({ role: 'student', course: { $in: courseIds } })
@@ -86,9 +111,10 @@ class TeacherAnalyticsService {
 
         const studentIds = students.map(s => s._id);
 
-        // Aggregate their progress globally
+        // Aggregate progress for the teacher's own topics only, so mastery is not
+        // diluted or inflated by work the student did in another teacher's course.
         const progressAggr = await Progress.aggregate([
-            { $match: { studentId: { $in: studentIds } } },
+            { $match: { studentId: { $in: studentIds }, topicId: { $in: topicIds } } },
             {
                 $group: {
                     _id: "$studentId",

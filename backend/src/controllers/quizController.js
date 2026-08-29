@@ -2,7 +2,8 @@ const asyncHandler = require('../middleware/asyncHandler');
 const Quiz = require('../models/Quiz');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
 const { validate } = require('../utils/validate');
-const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const { parsePagination, buildPaginationMeta, buildContentFilter } = require('../utils/queryHelper');
+const { isAdmin, ownerFilter } = require('../utils/ownership');
 const QuizAttempt = require('../models/QuizAttempt');
 const Question = require('../models/Question');
 const masteryService = require('../services/mastery.service');
@@ -14,9 +15,25 @@ const { ERROR_CODES } = require('../config/constants');
 // ─── GET /quizzes ──────────────────────────────────────────────────────────
 const getQuizzes = asyncHandler(async (req, res) => {
     const pagination = parsePagination(req.query);
-    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    const defaults = canSeeAll ? {} : { isPublished: true };
-    const filter = buildContentFilter(req.query, defaults);
+    const filter = buildContentFilter(req.query, {});
+    const publishedRequested = req.query.published !== undefined;
+
+    if (req.ownerScoped && !isAdmin(req.user)) {
+        // Teacher management: only quizzes the teacher owns.
+        Object.assign(filter, ownerFilter(req.user));
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (isAdmin(req.user)) {
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (req.user && req.user.role === 'teacher') {
+        // Catalogue browsing: published quizzes plus the teacher's own drafts.
+        delete filter.isPublished;
+        filter.$and = [
+            ...(filter.$and || []),
+            { $or: [{ isPublished: true }, { createdBy: req.user._id }] },
+        ];
+    } else if (!publishedRequested) {
+        filter.isPublished = true;
+    }
 
     const [quizzes, total] = await Promise.all([
         Quiz.find(filter)
@@ -44,18 +61,16 @@ const getQuizById = asyncHandler(async (req, res) => {
             select: 'question options difficulty questionType',   // do NOT expose correctAnswer/explanation in quiz view
         });
 
-    if (!quiz) {
-        const err = new Error('Quiz not found');
-        err.statusCode = 404;
-        throw err;
-    }
+    if (!quiz) throw notFound('Quiz');
 
-    const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    if (!quiz.isPublished && !isPrivileged) {
-        const err = new Error('Quiz not found');
-        err.statusCode = 404;
-        throw err;
-    }
+    const ownerId = quiz.createdBy?._id || quiz.createdBy;
+    const isOwner = req.user && ownerId && ownerId.toString() === req.user._id.toString();
+
+    // Owner-scoped detail: another teacher's quiz must look like a missing one.
+    if (req.ownerScoped && !isAdmin(req.user) && !isOwner) throw notFound('Quiz');
+
+    // Drafts are visible to admins and to the owning teacher only.
+    if (!quiz.isPublished && !isAdmin(req.user) && !isOwner) throw notFound('Quiz');
 
     return successResponse(res, quiz, 'Quiz fetched');
 });
@@ -65,8 +80,20 @@ const createQuiz = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
+    // Whitelisted fields only — a client-supplied createdBy is ignored.
+    const {
+        title, description, questions, difficulty, durationMinutes, passingScore, subjectId, topicId,
+    } = req.body;
+
     const quiz = await Quiz.create({
-        ...req.body,
+        title,
+        description,
+        questions,
+        difficulty,
+        durationMinutes,
+        passingScore,
+        subjectId,
+        topicId,
         isPublished: false,
         createdBy: req.user._id,
     });
@@ -74,30 +101,29 @@ const createQuiz = asyncHandler(async (req, res) => {
     return successResponse(res, quiz, 'Quiz created', 201);
 });
 
+/**
+ * Load a quiz the caller may mutate. Ownership is part of the query so that
+ * knowing the id of another teacher's quiz grants nothing.
+ */
+const findOwnQuiz = async (id, user) => {
+    const quiz = await Quiz.findOne({ _id: id, ...ownerFilter(user) });
+    if (!quiz) throw notFound('Quiz');
+    return quiz;
+};
+
 // ─── PATCH /quizzes/:id ────────────────────────────────────────────────────
 const updateQuiz = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) {
-        const err = new Error('Quiz not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(quiz, req.user)) {
-        const err = new Error('You do not have permission to edit this quiz');
-        err.statusCode = 403;
-        throw err;
-    }
+    const quiz = await findOwnQuiz(req.params.id, req.user);
 
     const WHITELIST = ['title', 'description', 'questions', 'difficulty', 'durationMinutes', 'passingScore', 'subjectId', 'topicId'];
     WHITELIST.forEach((field) => {
         if (req.body[field] !== undefined) quiz[field] = req.body[field];
     });
 
-    if (req.body.isPublished !== undefined && req.user.role === 'admin') {
+    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
         quiz.isPublished = req.body.isPublished;
     }
 
@@ -107,18 +133,7 @@ const updateQuiz = asyncHandler(async (req, res) => {
 
 // ─── DELETE /quizzes/:id ───────────────────────────────────────────────────
 const deleteQuiz = asyncHandler(async (req, res) => {
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) {
-        const err = new Error('Quiz not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(quiz, req.user)) {
-        const err = new Error('You do not have permission to delete this quiz');
-        err.statusCode = 403;
-        throw err;
-    }
+    const quiz = await findOwnQuiz(req.params.id, req.user);
 
     await quiz.deleteOne();
     return successResponse(res, null, 'Quiz deleted');

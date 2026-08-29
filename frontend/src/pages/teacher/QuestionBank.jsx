@@ -11,7 +11,8 @@ const QuestionBank = () => {
 
     const { data, isLoading, isError, error } = useQuery({
         queryKey: ['teacher-questions'],
-        queryFn: teacherService.getTeacherQuestions
+        // Teacher-scoped endpoint: returns only this teacher's questions.
+        queryFn: () => teacherService.getTeacherQuestions({ limit: 100 })
     });
 
     const mutateQuestion = useMutation({

@@ -2,7 +2,15 @@ const asyncHandler = require('../middleware/asyncHandler');
 const Topic = require('../models/Topic');
 const Subject = require('../models/Subject');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
-const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const { validate } = require('../utils/validate');
+const { parsePagination, buildPaginationMeta, buildContentFilter } = require('../utils/queryHelper');
+const {
+    isAdmin,
+    ownsCourse,
+    getOwnedSubjectIds,
+    getAuthorizedTopic,
+} = require('../utils/ownership');
+const { notFound, forbidden } = require('../utils/AppError');
 const practiceService = require('../services/practice.service');
 const streakService = require('../services/streak.service');
 const LearningResource = require('../models/LearningResource');
@@ -11,9 +19,32 @@ const Progress = require('../models/Progress');
 // ─── GET /topics ───────────────────────────────────────────────────────────
 const getTopics = asyncHandler(async (req, res) => {
     const pagination = parsePagination(req.query);
-    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    const defaults = canSeeAll ? {} : { isPublished: true };
-    const filter = buildContentFilter(req.query, defaults);
+    const filter = buildContentFilter(req.query, {});
+    const publishedRequested = req.query.published !== undefined;
+
+    if (req.ownerScoped && !isAdmin(req.user)) {
+        // Restrict to topics under the authenticated teacher's own courses.
+        const subjectIds = await getOwnedSubjectIds(req.user);
+        if (filter.subjectId) {
+            const parent = await Subject.findById(filter.subjectId).select('courseId');
+            if (!parent || !(await ownsCourse(parent.courseId, req.user))) throw notFound('Subject');
+        } else {
+            filter.subjectId = { $in: subjectIds };
+        }
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (isAdmin(req.user)) {
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (req.user && req.user.role === 'teacher') {
+        // Catalogue browsing: published topics plus the teacher's own drafts.
+        const subjectIds = await getOwnedSubjectIds(req.user);
+        delete filter.isPublished;
+        filter.$and = [
+            ...(filter.$and || []),
+            { $or: [{ isPublished: true }, { subjectId: { $in: subjectIds } }] },
+        ];
+    } else if (!publishedRequested) {
+        filter.isPublished = true;
+    }
 
     const [topics, total] = await Promise.all([
         Topic.find(filter)
@@ -34,18 +65,19 @@ const getTopicById = asyncHandler(async (req, res) => {
         .populate('subjectId', 'name courseId')
         .populate('createdBy', 'firstName lastName');
 
-    if (!topic) {
-        const err = new Error('Topic not found');
-        err.statusCode = 404;
-        throw err;
-    }
+    if (!topic) throw notFound('Topic');
 
-    const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    if (!topic.isPublished && !isPrivileged) {
-        const err = new Error('Topic not found');
-        err.statusCode = 404;
-        throw err;
-    }
+    const parentCourseId = topic.subjectId?.courseId;
+    const isOwner =
+        req.user && req.user.role !== 'student' && parentCourseId
+            ? await ownsCourse(parentCourseId, req.user)
+            : false;
+
+    // Owner-scoped detail: another teacher's topic must look like a missing one.
+    if (req.ownerScoped && !isAdmin(req.user) && !isOwner) throw notFound('Topic');
+
+    // Drafts are visible to admins and to the owning teacher only.
+    if (!topic.isPublished && !isAdmin(req.user) && !isOwner) throw notFound('Topic');
 
     return successResponse(res, topic, 'Topic fetched');
 });
@@ -55,22 +87,23 @@ const createTopic = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    // Verify the subject exists and teacher owns it
-    const subject = await Subject.findById(req.body.subjectId);
-    if (!subject) {
-        const err = new Error('Subject not found');
-        err.statusCode = 404;
-        throw err;
+    // The parent subject must exist and its course must belong to the teacher.
+    const subject = await Subject.findById(req.body.subjectId).select('_id courseId');
+    if (!subject) throw notFound('Subject');
+
+    if (!isAdmin(req.user) && !(await ownsCourse(subject.courseId, req.user))) {
+        throw forbidden('You can only add topics to your own courses');
     }
 
-    if (req.user.role === 'teacher' && subject.createdBy.toString() !== req.user._id.toString()) {
-        const err = new Error('You can only add topics to your own subjects');
-        err.statusCode = 403;
-        throw err;
-    }
+    const { name, description, order, difficulty, estimatedMinutes, subjectId } = req.body;
 
     const topic = await Topic.create({
-        ...req.body,
+        name,
+        description,
+        order,
+        difficulty,
+        estimatedMinutes,
+        subjectId,
         isPublished: false,
         createdBy: req.user._id,
     });
@@ -83,25 +116,15 @@ const updateTopic = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const topic = await Topic.findById(req.params.id);
-    if (!topic) {
-        const err = new Error('Topic not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(topic, req.user)) {
-        const err = new Error('You do not have permission to edit this topic');
-        err.statusCode = 403;
-        throw err;
-    }
+    // Authority follows Topic → Subject → Course.
+    const topic = await getAuthorizedTopic(req.params.id, req.user);
 
     const WHITELIST = ['name', 'description', 'order', 'difficulty', 'estimatedMinutes'];
     WHITELIST.forEach((field) => {
         if (req.body[field] !== undefined) topic[field] = req.body[field];
     });
 
-    if (req.body.isPublished !== undefined && req.user.role === 'admin') {
+    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
         topic.isPublished = req.body.isPublished;
     }
 
@@ -111,18 +134,7 @@ const updateTopic = asyncHandler(async (req, res) => {
 
 // ─── DELETE /topics/:id ───────────────────────────────────────────────────
 const deleteTopic = asyncHandler(async (req, res) => {
-    const topic = await Topic.findById(req.params.id);
-    if (!topic) {
-        const err = new Error('Topic not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (!isOwnerOrAdmin(topic, req.user)) {
-        const err = new Error('You do not have permission to delete this topic');
-        err.statusCode = 403;
-        throw err;
-    }
+    const topic = await getAuthorizedTopic(req.params.id, req.user);
 
     await topic.deleteOne();
     return successResponse(res, null, 'Topic deleted');

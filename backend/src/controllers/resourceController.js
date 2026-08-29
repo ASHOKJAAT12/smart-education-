@@ -2,15 +2,48 @@ const asyncHandler = require('../middleware/asyncHandler');
 const LearningResource = require('../models/LearningResource');
 const { successResponse, paginatedResponse } = require('../utils/apiResponse');
 const { validate } = require('../utils/validate');
-const { parsePagination, buildPaginationMeta, buildContentFilter, isOwnerOrAdmin } = require('../utils/queryHelper');
+const { parsePagination, buildPaginationMeta, buildContentFilter } = require('../utils/queryHelper');
+const {
+    isAdmin,
+    getOwnedTopicIds,
+    getAuthorizedResource,
+    getAuthorizedTopic,
+} = require('../utils/ownership');
+const { notFound } = require('../utils/AppError');
 const { uploadResource, deleteFile } = require('../services/cloudinaryService');
 
 // ─── GET /resources ────────────────────────────────────────────────────────
 const getResources = asyncHandler(async (req, res) => {
     const pagination = parsePagination(req.query);
-    const canSeeAll = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    const defaults = canSeeAll ? {} : { isPublished: true };
-    const filter = buildContentFilter(req.query, defaults);
+    const filter = buildContentFilter(req.query, {});
+    const publishedRequested = req.query.published !== undefined;
+
+    if (req.ownerScoped && !isAdmin(req.user)) {
+        // Resources the teacher uploaded, or that hang off their own courses.
+        const topicIds = await getOwnedTopicIds(req.user);
+        filter.$and = [
+            ...(filter.$and || []),
+            { $or: [{ uploadedBy: req.user._id }, { topicId: { $in: topicIds } }] },
+        ];
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (isAdmin(req.user)) {
+        if (!publishedRequested) delete filter.isPublished;
+    } else if (req.user && req.user.role === 'teacher') {
+        const topicIds = await getOwnedTopicIds(req.user);
+        delete filter.isPublished;
+        filter.$and = [
+            ...(filter.$and || []),
+            {
+                $or: [
+                    { isPublished: true },
+                    { uploadedBy: req.user._id },
+                    { topicId: { $in: topicIds } },
+                ],
+            },
+        ];
+    } else if (!publishedRequested) {
+        filter.isPublished = true;
+    }
 
     const [resources, total] = await Promise.all([
         LearningResource.find(filter)
@@ -28,22 +61,28 @@ const getResources = asyncHandler(async (req, res) => {
 
 // ─── GET /resources/:id ────────────────────────────────────────────────────
 const getResourceById = asyncHandler(async (req, res) => {
+    // Owner-scoped detail: resolve authority through the content hierarchy.
+    if (req.ownerScoped) {
+        const owned = await getAuthorizedResource(req.params.id, req.user);
+        await owned.populate([
+            { path: 'topicId', select: 'name' },
+            { path: 'uploadedBy', select: 'firstName lastName' },
+        ]);
+        return successResponse(res, owned, 'Resource fetched');
+    }
+
     const resource = await LearningResource.findById(req.params.id)
         .select('-publicId')
         .populate('topicId', 'name')
         .populate('uploadedBy', 'firstName lastName');
 
-    if (!resource) {
-        const err = new Error('Resource not found');
-        err.statusCode = 404;
-        throw err;
-    }
+    if (!resource) throw notFound('Resource');
 
-    const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'teacher');
-    if (!resource.isPublished && !isPrivileged) {
-        const err = new Error('Resource not found');
-        err.statusCode = 404;
-        throw err;
+    if (!resource.isPublished && !isAdmin(req.user)) {
+        // Unpublished resources are only visible to the admin or the owner.
+        const ownerId = resource.uploadedBy?._id || resource.uploadedBy;
+        const isOwner = req.user && ownerId && ownerId.toString() === req.user._id.toString();
+        if (!isOwner) throw notFound('Resource');
     }
 
     return successResponse(res, resource, 'Resource fetched');
@@ -57,6 +96,10 @@ const createResource = asyncHandler(async (req, res) => {
     const { type, topicId, title, description } = req.body;
     let url = req.body.url || null;
     let publicId = null;
+
+    // Resources may only be attached to a topic inside the teacher's own course.
+    // getAuthorizedTopic throws 404 for someone else's topic.
+    await getAuthorizedTopic(topicId, req.user);
 
     if (type === 'link') {
         // For links, URL must be provided in body — no file upload
@@ -96,26 +139,15 @@ const updateResource = asyncHandler(async (req, res) => {
     const { hasErrors } = validate(req, res);
     if (hasErrors) return;
 
-    const resource = await LearningResource.findById(req.params.id).select('+publicId');
-    if (!resource) {
-        const err = new Error('Resource not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    // uploadedBy is the ownership field for resources
-    if (req.user.role !== 'admin' && resource.uploadedBy.toString() !== req.user._id.toString()) {
-        const err = new Error('You do not have permission to edit this resource');
-        err.statusCode = 403;
-        throw err;
-    }
+    // Authority: uploader, or the owner of the parent course hierarchy.
+    const resource = await getAuthorizedResource(req.params.id, req.user, { withPublicId: true });
 
     const WHITELIST = ['title', 'description'];
     WHITELIST.forEach((field) => {
         if (req.body[field] !== undefined) resource[field] = req.body[field];
     });
 
-    if (req.body.isPublished !== undefined && req.user.role === 'admin') {
+    if (req.body.isPublished !== undefined && isAdmin(req.user)) {
         resource.isPublished = req.body.isPublished;
     }
 
@@ -133,18 +165,7 @@ const updateResource = asyncHandler(async (req, res) => {
 
 // ─── DELETE /resources/:id ─────────────────────────────────────────────────
 const deleteResource = asyncHandler(async (req, res) => {
-    const resource = await LearningResource.findById(req.params.id).select('+publicId');
-    if (!resource) {
-        const err = new Error('Resource not found');
-        err.statusCode = 404;
-        throw err;
-    }
-
-    if (req.user.role !== 'admin' && resource.uploadedBy.toString() !== req.user._id.toString()) {
-        const err = new Error('You do not have permission to delete this resource');
-        err.statusCode = 403;
-        throw err;
-    }
+    const resource = await getAuthorizedResource(req.params.id, req.user, { withPublicId: true });
 
     // Clean up Cloudinary asset
     if (resource.publicId) {

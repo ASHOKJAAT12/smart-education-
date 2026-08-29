@@ -42,6 +42,7 @@ const courseSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
             required: true,
+            index: true,
         },
     },
     {
@@ -55,7 +56,11 @@ const courseSchema = new mongoose.Schema(
 courseSchema.index({ isPublished: 1 });
 courseSchema.index({ category: 1 });
 courseSchema.index({ level: 1 });
-courseSchema.index({ createdBy: 1 });
+// `createdBy` is declared with index: true above (teacher-scoped lookups).
+// The compound index serves the two hot query shapes together:
+//   { createdBy }                     → teacher course list
+//   { createdBy, isPublished }        → teacher drafts / published split
+courseSchema.index({ createdBy: 1, isPublished: 1 });
 
 // ─── Virtual: subjects ────────────────────────────────────────────────────
 courseSchema.virtual('subjects', {

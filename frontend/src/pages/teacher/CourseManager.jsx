@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { BookOpen, Plus, Edit2, Trash2, Eye, EyeOff, LayoutGrid, X } from 'lucide-react';
-import { getCourses, createCourse, updateCourse, deleteCourse } from '../../services/educationService';
+import { teacherService } from '../../services/teacherService';
 import Spinner from '../../components/ui/Spinner';
 
 const CourseManager = () => {
@@ -10,13 +10,15 @@ const CourseManager = () => {
     const [isCreating, setIsCreating] = useState(false);
     const [editingCourse, setEditingCourse] = useState(null);
 
+    // Teacher-scoped endpoint: the backend returns only this teacher's courses
+    // (admins see all). No client-side ownership filtering is performed.
     const { data, isLoading, error } = useQuery({
         queryKey: ['teacher-courses'],
-        queryFn: () => getCourses({ limit: 50, published: 'all' }).then(r => r.data?.data || []),
+        queryFn: () => teacherService.getTeacherCourses({ limit: 50 }).then(r => r.data?.data || []),
     });
 
     const createMutation = useMutation({
-        mutationFn: (formData) => createCourse(formData),
+        mutationFn: (formData) => teacherService.createCourse(formData),
         onSuccess: () => {
             queryClient.invalidateQueries(['teacher-courses']);
             setIsCreating(false);
@@ -24,7 +26,7 @@ const CourseManager = () => {
     });
 
     const updateMutation = useMutation({
-        mutationFn: ({ id, formData }) => updateCourse(id, formData),
+        mutationFn: ({ id, formData }) => teacherService.updateCourse(id, formData),
         onSuccess: () => {
             queryClient.invalidateQueries(['teacher-courses']);
             setEditingCourse(null);
@@ -32,7 +34,7 @@ const CourseManager = () => {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id) => deleteCourse(id),
+        mutationFn: (id) => teacherService.deleteCourse(id),
         onSuccess: () => {
             queryClient.invalidateQueries(['teacher-courses']);
         }

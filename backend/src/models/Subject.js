@@ -45,6 +45,8 @@ const subjectSchema = new mongoose.Schema(
 subjectSchema.index({ courseId: 1, order: 1 });
 subjectSchema.index({ isPublished: 1 });
 subjectSchema.index({ createdBy: 1 });
+// Teacher-scoped listing resolves ownership through the parent course.
+subjectSchema.index({ courseId: 1, isPublished: 1 });
 
 // ─── Virtual: topics ──────────────────────────────────────────────────────
 subjectSchema.virtual('topics', {
