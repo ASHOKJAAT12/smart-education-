@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 
 const routes = require('./routes/index');
+const { getHealth } = require('./controllers/healthController');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const sanitizeRequest = require('./middleware/sanitize');
@@ -111,6 +112,9 @@ app.use(sanitizeRequest);
 
 // ─── Baseline rate limiting (route-specific limiters add stricter caps) ────
 app.use('/api', generalLimiter);
+
+// ─── Root Health Route ─────────────────────────────────────────────────────
+app.get('/', getHealth);
 
 // ─── API routes ────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);
